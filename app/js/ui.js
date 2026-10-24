@@ -5,6 +5,8 @@ export function h(tag, attrs = {}, ...kids){
     if (v == null || v === false) continue;
     if (k === 'class') e.className = v;
     else if (k === 'html') e.innerHTML = v;
+    // a textarea shows its value only through the property (the attribute is ignored)
+    else if (k === 'value' && e.tagName === 'TEXTAREA') e.value = v;
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (k in e && typeof v !== 'string') e[k] = v;
     else e.setAttribute(k, v === true ? '' : v);
@@ -27,7 +29,8 @@ export function toast(msg, { action, fn } = {}){
 // a window over the page; returns its close()
 export function modal(title, body, { wide = false, onClose } = {}){
   const close = () => { bg.remove(); document.removeEventListener('keydown', esc); onClose?.(); };
-  const esc = (e) => { if (e.key === 'Escape') close(); };
+  // Escape closes the window on top only (a comparison opened from Versions goes back to Versions)
+  const esc = (e) => { if (e.key === 'Escape' && [...document.querySelectorAll('.modal-bg')].pop() === bg){ e.stopImmediatePropagation(); close(); } };
   const bg = h('div', { class: 'modal-bg', onclick: (e) => { if (e.target === bg) close(); } },
     h('div', { class: 'modal' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true' },
       h('div', { class: 'modal-head' }, h('h3', {}, title), h('button', { class: 'ib', type: 'button', title: 'Close', 'aria-label': 'Close', html: I.x, onclick: () => close() })),
@@ -91,5 +94,12 @@ export const I = {
   scenes: svg('<path d="M4 6h16M4 12h16M4 18h10"/>'),
   more: svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>', 2.4),
   undo: svg('<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>'),
+  mic: svg('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/>'),
+  clock: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  board: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 5v4M13 5v4M18 5v4"/>'),
+  image: svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/>'),
+  branch: svg('<circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7.5v9M18 10c0 4-6 3.5-11 7"/>'),
+  globe: svg('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5s1.1-5.9 3.6-8.5z"/>'),
+  copy: svg('<rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"/>'),
   redo: svg('<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>'),
 };

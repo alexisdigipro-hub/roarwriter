@@ -1,4 +1,4 @@
-import { SCENE_START, blankScript, el, normalize, upper } from './model.js';
+import { cleanMarks, segmentsOf, SCENE_START, blankScript, el, normalize, upper } from './model.js';
 
 /* Fountain (fountain.io), the plain-text screenplay format: what RoarWriter reads and writes as .fountain, and
    what the AI answers in. Greek scene headings and names are written with Fountain's forcing marks (. and @)
@@ -46,7 +46,7 @@ export function parseFountain(text){
     if (/^!/.test(line)){ const x = line.slice(1); const k = /^(PAGE|ΣΕΛΙΔΑ)\s+\S/i.test(x) ? 'page' : /^(PANEL|ΚΑΡΕ)\s+\S/i.test(x) ? 'panel' : /^(SFX|SOUND|ΗΧΟΣ)\b/i.test(x) ? 'sound' : /^(MUSIC|ΜΟΥΣΙΚΗ)\b/i.test(x) ? 'music' : /^CAPTION\b/i.test(x) ? 'caption' : /^VIDEO:/i.test(x) ? 'video' : /^AUDIO:/i.test(x) ? 'audio' : 'action'; els.push(el(k, k === 'video' || k === 'audio' ? x.replace(/^\w+:\s*/, '') : x)); i++; continue; }
     // a character: @forced, or an all-capital line with something under it
     if ((/^@/.test(line) || (isUpperLine(line.replace(/\(.*?\)/g, '')) && !/^[\d\p{P}\p{S}\s]+$/u.test(line))) && blankAt(i - 1) && !blankAt(i + 1)){
-      els.push(el('character', line.replace(/^@/, '').replace(/\s*\^$/, '')));
+      els.push({ ...el('character', line.replace(/^@/, '').replace(/\s*\^$/, '')), ...(/\^$/.test(line) ? { du: 1 } : {}) });
       i++;
       while (i < lines.length && lines[i].trim() !== ''){
         const d = lines[i].trim();
@@ -65,9 +65,27 @@ export function parseFountain(text){
     while (i < lines.length && lines[i].trim() !== ''){ para.push(lines[i].replace(/^!/, '').trimEnd()); i++; }
     els.push(el('action', para.join('\n')));
   }
-  s.els = els.length ? els : blankScript().els;
+  s.els = (els.length ? els : blankScript().els).map(emphasis);
   return normalize(s);
 }
+
+/* Fountain's emphasis: ***bold italic***, **bold**, *italic*, _underline_ become the line's marks */
+function emphasis(e){
+  if (['scene', 'character', 'transition'].includes(e.t) || !/[*_]/.test(e.x)) return e;
+  const f = [];
+  let x = e.x;
+  for (const [re, st] of [[/\*\*\*(\S(?:[^*\n]*?\S)?)\*\*\*/, ['b', 'i']], [/\*\*(\S(?:[^*\n]*?\S)?)\*\*/, ['b']], [/\*(\S(?:[^*\n]*?\S)?)\*/, ['i']], [/(?<![\p{L}\p{N}])_(\S(?:[^_\n]*?\S)?)_(?![\p{L}\p{N}])/u, ['u']]]){
+    for (let m = x.match(re); m; m = x.match(re)){
+      const a = m.index, inner = m[1], cut = m[0].length - inner.length, lead = m[0].indexOf(inner);
+      // what comes after moves back by the markers taken out
+      for (const r of f){ if (r[0] > a) r[0] -= r[0] >= a + lead + inner.length ? cut : lead; if (r[1] > a) r[1] -= r[1] >= a + lead + inner.length ? cut : lead; }
+      x = x.slice(0, a) + inner + x.slice(a + m[0].length);
+      for (const st2 of st) f.push([a, a + inner.length, st2]);
+    }
+  }
+  return f.length ? { ...e, x, f: cleanMarks(f, x.length) } : e;
+}
+const emph = (e, x) => (e.f?.length ? segmentsOf(x, e.f).map((g) => { let t = g.text; if (!t.trim()) return t; if (g.b && g.i) t = `***${t}***`; else if (g.b) t = `**${t}**`; else if (g.i) t = `*${t}*`; if (g.u) t = `_${t}_`; return t; }).join('') : x);
 
 // just the elements, for pasting and for the AI's answers
 export const fountainToEls = (text) => parseFountain(String(text || '').replace(/^```[a-z]*\n?|```\s*$/gm, '')).els.filter((e) => e.x.trim());
@@ -93,7 +111,7 @@ export function toFountain(script, { titlePage = true } = {}){
     const tight = ['dialogue', 'paren', 'lyric'].includes(e.t) && prev && ['character', 'dialogue', 'paren', 'lyric'].includes(prev.t);
     if (i && !tight) out.push('');
     if (e.t === 'scene') out.push(SCENE_START.test(upper(x)) && !/[Ͱ-Ͽ]/.test(x) ? upper(x) : '.' + upper(x));
-    else if (e.t === 'character') out.push(/^[A-Z0-9 ().'’-]+$/.test(upper(x)) && /[A-Z]/.test(upper(x)) ? upper(x) : '@' + upper(x));
+    else if (e.t === 'character') out.push((/^[A-Z0-9 ().'’-]+$/.test(upper(x)) && /[A-Z]/.test(upper(x)) ? upper(x) : '@' + upper(x)) + (e.du ? ' ^' : ''));
     else if (e.t === 'transition') out.push(/TO:$/.test(upper(x)) && !/[Ͱ-Ͽ]/.test(x) ? upper(x) : '> ' + upper(x));
     else if (e.t === 'paren') out.push(/^\(.*\)$/.test(x.trim()) ? x.trim() : `(${x.trim()})`);
     else if (e.t === 'shot') out.push('!' + upper(x));
@@ -102,8 +120,8 @@ export function toFountain(script, { titlePage = true } = {}){
     else if (e.t === 'lyric') out.push(...x.split('\n').map((l) => '~' + l));
     else if (['sound', 'music', 'page', 'panel', 'caption'].includes(e.t)) out.push('!' + upper(x));
     else if (e.t === 'video' || e.t === 'audio') out.push(`!${e.t.toUpperCase()}: ${x}`);
-    else if (e.t === 'action' && (isUpperLine(x) || SCENE_START.test(x))) out.push('!' + x);
-    else out.push(x);
+    else if (e.t === 'action' && (isUpperLine(x) || SCENE_START.test(x))) out.push('!' + emph(e, x));
+    else out.push(emph(e, x));
   });
   return out.join('\n') + '\n';
 }

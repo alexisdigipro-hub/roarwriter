@@ -1,4 +1,4 @@
-import { LABEL, SCENE_START, TIMES, charactersOf, el, isGreek, placesOf, upper, uid } from './model.js';
+import { LABEL, SCENE_START, TIMES, charactersOf, cleanMarks, el, isGreek, placesOf, segmentsOf, sliceMarks, upper, uid } from './model.js';
 import { formatOf, kindsOf, nextOf, tabOf } from './formats.js';
 import { pref } from './prefs.js';
 import { fountainToEls } from './fountain.js';
@@ -54,12 +54,60 @@ export class Editor {
     p.className = 'e';
     p.dataset.t = e.t;
     p.dataset.id = e.id;
-    if (e.x) p.textContent = e.x; else p.appendChild(document.createElement('br'));
+    if (e.rv) p.dataset.rv = e.rv;
+    if (e.du) p.dataset.du = '1';
+    this.fill(p, e.x, e.f);
     return p;
+  }
+  // a line's words, with their bold, italic and underline
+  fill(p, x, f){
+    p.replaceChildren();
+    if (!x){ p.appendChild(document.createElement('br')); return; }
+    if (!f?.length){ p.textContent = x; return; }
+    for (const g of segmentsOf(x, f)){
+      let n = document.createTextNode(g.text);
+      for (const [on, tag] of [[g.u, 'u'], [g.i, 'i'], [g.b, 'b']]) if (on){ const w = document.createElement(tag); w.appendChild(n); n = w; }
+      p.appendChild(n);
+    }
+  }
+  // where a line is bold, italic or underlined, counted in its text
+  marksOf(p){
+    if (!p.querySelector('b,strong,i,em,u,span[style]')) return [];
+    const out = [];
+    let pos = 0;
+    const walk = (n, st) => {
+      if (n.nodeType === 3){ const len = n.data.length; if (len) for (const k of st) out.push([pos, pos + len, k]); pos += len; return; }
+      if (n.nodeName === 'BR'){ pos += 1; return; }
+      const tag = n.nodeName, css = n.style || {}, next = new Set(st);
+      if (tag === 'B' || tag === 'STRONG' || /^(bold|[6-9]00)$/.test(css.fontWeight || '')) next.add('b');
+      if (tag === 'I' || tag === 'EM' || css.fontStyle === 'italic') next.add('i');
+      if (tag === 'U' || /underline/.test(css.textDecoration || css.textDecorationLine || '')) next.add('u');
+      for (const c of n.childNodes) walk(c, next);
+    };
+    for (const c of p.childNodes) walk(c, new Set());
+    return cleanMarks(out, this.textOf(p).length);
+  }
+  // Cmd/Ctrl+B, I, U or the bar's buttons: the selection gets (or loses) the style
+  format(st){
+    try { document.execCommand('styleWithCSS', false, false); } catch {}
+    document.execCommand({ b: 'bold', i: 'italic', u: 'underline' }[st]);
+    this.commit(true);
   }
   render(els){ this.box.replaceChildren(...els.map((e) => this.node(e))); }
   textOf(p){ return (p.innerText || '').replace(/ /g, ' ').replace(/\n$/, ''); }
-  read(){ return [...this.box.children].map((p) => ({ id: p.dataset.id || uid(), t: p.dataset.t || 'action', x: this.textOf(p) })); }
+  read(){ return [...this.box.children].map((p) => { const f = this.marksOf(p); return { id: p.dataset.id || uid(), t: p.dataset.t || 'action', x: this.textOf(p), ...(p.dataset.rv ? { rv: p.dataset.rv } : {}), ...(p.dataset.du ? { du: 1 } : {}), ...(f.length ? { f } : {}) }; }); }
+  /* Revision mode: a line written or changed while it is on carries the revision's colour (an asterisk in the
+     margin, as a production draft has them) */
+  markRevision(els, before){
+    const col = this.script.revision?.on ? this.script.revision.color : '';
+    if (!col) return els;
+    const prev = new Map(before.map((e) => [e.id, e]));
+    for (const e of els){
+      const p = prev.get(e.id);
+      if ((!p || p.t !== e.t || p.x !== e.x || JSON.stringify(p.f || []) !== JSON.stringify(e.f || [])) && e.x.trim()){ e.rv = col; const n = this.box.querySelector(`p[data-id="${CSS.escape(e.id)}"]`); if (n) n.dataset.rv = col; }
+    }
+    return els;
+  }
   // what a browser leaves behind after typing over several elements or pasting: put right
   /* Safari can leave the caret just outside an empty line, so a letter typed lands in the page itself, not in a
      line (Alex, 24 Oct: every letter of a dialogue became a line of its own). Such text goes back into the line
@@ -69,6 +117,8 @@ export class Editor {
     const has = (n) => sel.rangeCount > 0 && (sel.anchorNode === n || !!n.contains?.(sel.anchorNode));
     const offIn = (n) => { if (n.nodeType === 3) return sel.anchorNode === n ? sel.anchorOffset : n.length; const r = document.createRange(); r.selectNodeContents(n); r.setEnd(sel.anchorNode, sel.anchorOffset); return r.toString().length; };
     let back = null;
+    // a style put on several lines at once can wrap the lines themselves: they come out of it
+    for (const n of [...this.box.children]) if (n.nodeName !== 'P' && n.querySelector?.('p')) n.replaceWith(...n.childNodes);
     for (const n of [...this.box.childNodes]){
       if (n.nodeName === 'P'){
         if (!n.dataset.t) n.dataset.t = 'action';
@@ -102,7 +152,7 @@ export class Editor {
     if (back) this.place(back[0], back[1]);
   }
   commit(structural = false){
-    this.script.els = this.read();
+    this.script.els = this.markRevision(this.read(), this.script.els || []);
     this.snapshot(structural);
     this.onChange(this.script);
   }
@@ -180,6 +230,16 @@ export class Editor {
     this.suggest();
   }
   setCurrentType(t){ const p = this.current() || this.box.lastElementChild; this.setType(p, t); }
+  /* Dual dialogue: the character with the caret (or the one whose speech it is in) speaks at the same time as the
+     one before; again, and it speaks on its own */
+  toggleDual(){
+    let p = this.current();
+    while (p && ['dialogue', 'paren', 'lyric'].includes(p.dataset.t)) p = p.previousElementSibling;
+    if (!p || p.dataset.t !== 'character') return false;
+    if (p.dataset.du) delete p.dataset.du; else p.dataset.du = '1';
+    this.commit(true);
+    return !!p.dataset.du;
+  }
 
   /* ---------- keys ---------- */
   key(e){
@@ -198,8 +258,10 @@ export class Editor {
     // Ctrl+1 for its desktops); Cmd/Ctrl and a number too, where it gets through (the Mac and Windows app)
     if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && digit != null){ const k = kindsOf(this.script).find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
     if (mod && !e.altKey && !e.shiftKey && digit != null){ const k = kindsOf(this.script).find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
+    if (mod && !e.shiftKey && !e.altKey && ['KeyB', 'KeyI', 'KeyU'].includes(e.code)){ e.preventDefault(); this.format(e.code.slice(3).toLowerCase()); return; }
     if (mod && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); return; }
     if (mod && e.key === 'y'){ e.preventDefault(); this.doRedo(); return; }
+    if (mod && !e.shiftKey && (e.code === 'KeyD' || e.key === 'd')){ e.preventDefault(); if (this.toggleDual() === false) this.onDualMiss?.(); return; }
     if (e.key === 'Tab'){ e.preventDefault(); const p = this.current(); if (p) this.setType(p, tabOf(this.script, p.dataset.t, e.shiftKey)); return; }
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); this.enter(); return; }
     if (e.key === 'Enter' && e.shiftKey){ e.preventDefault(); document.execCommand('insertLineBreak'); return; }
@@ -224,8 +286,9 @@ export class Editor {
       p.after(next);
       this.place(next, 0);
     } else {
-      p.textContent = before; if (!before) p.appendChild(document.createElement('br'));
-      next = this.node(el(t, after));
+      const f = this.marksOf(p);
+      this.fill(p, before, sliceMarks(f, 0, before.length));
+      next = this.node({ ...el(t, after), f: sliceMarks(f, at, text.length) });
       p.after(next);
       this.place(next, 0);
     }
@@ -280,8 +343,9 @@ export class Editor {
     if (back) this.place(back, this.textOf(back).length);
   }
   // the script as someone else changed it (Collaborate): the page is redrawn and the caret stays where it was
-  setEls(els){
+  setEls(els, { mark = false } = {}){
     const p = this.current(), id = p?.dataset.id, at = p ? this.offset(p) : 0, had = document.activeElement === this.box;
+    if (mark) els = this.markRevision(els.map((e) => ({ ...e })), this.script.els || []);
     this.render(els);
     this.script.els = els;
     this.snapshot(true);

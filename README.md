@@ -29,6 +29,20 @@ Screenwriting in the industry format, in English or Greek. The Mad Lions Lab.
 - **Read aloud**: a table read with the device's voices, one per character, the line being read lit.
 - **Report** (Breakdown > Report): pages, minutes, scenes, INT/EXT, day and night, locations, who speaks how much.
 - **Sides** (Export > Sides): chosen scenes, or every scene of a character, as their own PDF, numbered as in the script.
+- **Bold, italic, underline** inside a line (B I U in the bar, Cmd/Ctrl+B, I, U); kept in the PDF, Fountain (**, *, _) and Final Draft.
+- **Dual dialogue**: Cmd/Ctrl+D on the second character (or the kind menu > Dual dialogue): the two speak side by side, on the page, in the PDF, Fountain (^) and Final Draft.
+- **Revisions** (Settings > Revisions, or the colour chip in the bar): what changes is marked with an asterisk in the revision's colour (Blue, Pink, Yellow, Green, Goldenrod…), scene numbers can be locked (12A, 12B), the PDF names the revision on the pages it changed, can colour them or give only them; next colour, clear the marks.
+- **Versions** (the clock in the bar): save a named version, one is kept on its own every day you write; compare any version with now or two with each other (added, changed words, taken out), go back to one (what is there now is kept first).
+- **Alternates of a scene** (AI > Scene > Alternates): keep this version of a scene, let the AI write another way it could go, compare and use one.
+- **The AI on the whole script** (AI > Whole script): ask anything (the scenes it names, like [12], take you there), Coverage, Continuity (also names written two ways, found at once), Budget pass (what makes it expensive and a cheaper way to the same story value), Pitch package (logline, synopses, treatment, characters, director's statement, comparables; English or Greek), Translate (a new copy in the other language, format and names kept), Runtime & tension. Every report is kept in the script, with copy, .txt and PDF.
+- **Research** (AI > Research): facts for the scene from the web with their sources, kept as a note on the scene.
+- **Runtime and tension** (Breakdown > Report): the running time from the words, truer every time Read aloud times the speeches, and the AI's tension of every scene drawn along the minutes.
+- **Beats** (Page | Cards | Beats | Board): Save the Cat, three acts, Hero's Journey, TV hour or your own; every beat with the page where it should fall, the scene where it does (yours or the AI's) and how far off it is.
+- **Storyboard** (Board): frames for every scene, with a picture (click, drop or paste), size, angle, move and what we see; the AI breaks a scene into shots; Shot list (PDF, CSV) and a storyboard PDF.
+- **Shooting schedule** (Breakdown > Schedule, or ⋯): strips in the industry's colours with cast numbers and eighths, dragged onto days (or a first plan by location), Day out of Days, PDF and CSV.
+- **Dictation** (the microphone): speak in Greek or English, insert it as it is or let the AI lay it out as script (in the browser; in the Mac app the Mac's own Dictation, Fn twice).
+- **Writers together**: who else is in the script and in which scene, live; give scenes to writers (Cards > Writer).
+- **TV series** (Scripts > A series): the show's bible (logline, the world, characters and places from every episode, what is known since which episode) and its episodes; in an episode, the Series tab at the side.
 - **On a phone or tablet** (the web version): the page fills the screen in letters big enough to write in (the PDF keeps the real page), a bar on the keyboard with the seven kinds and Undo / Redo (there is no Tab there), Scenes and characters and the AI over the whole screen, one menu (⋯) for the zoom, the title page and the exports; two fingers on the page zoom it (the lines wrap again), the scripts as a list. Add it to the home screen (Share > Add to Home Screen) and it opens like an app.
 - **The Mac/Windows app** adds a real menu (File: Title Page, Export PDF, Save as Final Draft / Fountain; Format: the seven kinds with their shortcuts), Greek and English spelling, and updates itself from new releases.
 

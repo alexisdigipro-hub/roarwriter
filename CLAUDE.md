@@ -30,3 +30,9 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
   start) and settings.format; film is the default. Fade In: app/js/fadein.js (zip read/write, OSF).
 - Phones and tablets (Alex, 24 Oct): the web version under 860px (styles.css, last two blocks) has the fluid page, the kinds bar on the
   keyboard (main.js followKeyboard, visualViewport), the side and the AI over the screen; under 600px one bar with the ⋯ menu. Desktop untouched.
+- Studio (Alex, 25 Oct, v0.5.0): app/js/studio.js (versions with compare, scene alternates, the AI on the whole script: ask, coverage,
+  continuity, budget, package, translate, runtime/tension, research), board.js (storyboard, shot list; pictures in the bucket
+  roarwriter-boards), dictate.js, plan.js (beats, shooting schedule, presence), series.js (data.kind = 'series': bible + episodes).
+  The script also carries rv/du/f on lines (revision colour, dual dialogue, bold/italic/underline marks [from, to, 'b'|'i'|'u'])
+  and boards, alts, revision, timing, reports, pacing, beats, schedule, assign (model.js normalize and mergeScripts).
+  SQL: roarwriter_versions, roarwriter_presence, the storage bucket and its policies (supabase/roarwriter.sql, last parts).

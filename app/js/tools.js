@@ -1,5 +1,5 @@
 import { breakdownOf, fold, headingParts } from './breakdown.js';
-import { charactersOf, cleanName, isGreek, pageCount, scenesOf, upper } from './model.js';
+import { REVISIONS, charactersOf, cleanName, isGreek, pageCount, sceneNumbers, scenesOf, upper } from './model.js';
 import { FORMATS, FORMAT_LIST, fmtOf } from './formats.js';
 import { pref, setPref } from './prefs.js';
 import { I, ago, h, modal, toast } from './ui.js';
@@ -23,7 +23,7 @@ const row = (label, control, hint) => h('div', { class: 'set-row' }, h('div', { 
 export function openSettings(ctx, tab = 'script'){
   const { script } = ctx, set = script.settings;
   const body = h('div', { class: 'settings' });
-  const tabs = [['script', 'Script'], ['writing', 'Writing'], ['look', 'Look'], ['pdf', 'PDF'], ['read', 'Read aloud'], ['keys', 'Shortcuts']];
+  const tabs = [['script', 'Script'], ['writing', 'Writing'], ['revisions', 'Revisions'], ['look', 'Look'], ['pdf', 'PDF'], ['read', 'Read aloud'], ['keys', 'Shortcuts']];
   const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
   const panes = {
     script: () => [
@@ -41,6 +41,29 @@ export function openSettings(ctx, tab = 'script'){
       toggle(pref('focus'), (on) => { setPref('focus', on); ctx.redecorate(); }, 'Focus on the scene', 'Every other scene fades while you write.'),
       h('p', { class: 'hint' }, 'Enter goes on to what usually comes next, Tab changes the kind of line, as in Final Draft.'),
     ],
+    /* Revision mode (a production draft): every line changed while it is on carries the revision's colour and an
+       asterisk; the scene numbers can be locked (a new scene after 12 is 12A); the PDF names the revision on the
+       pages it changed, can colour them, or give only them */
+    revisions: () => {
+      const rv = (script.revision ||= {});
+      const today = new Date().toLocaleDateString('en-GB');
+      const marked = script.els.filter((e) => e.rv).length;
+      const changed = () => { ctx.save(); ctx.revisionChanged(); };
+      const colors = h('div', { class: 'rv-colors' }, ...REVISIONS.map(([k, l, c]) => h('button', { type: 'button', class: 'rv-c' + (rv.color === k ? ' on' : ''), style: `--rv:${c}`, title: l, onclick: () => { rv.color = k; changed(); draw(); } }, h('i'), l)));
+      return [
+        toggle(!!rv.on, (on) => { rv.on = on; if (on){ rv.color ||= 'blue'; rv.date ||= today; } changed(); draw(); }, 'Revision mode', 'What you change from now on is marked with an asterisk in the margin, in the revision’s colour.'),
+        row('Colour', colors, 'In the order the industry uses: Blue, Pink, Yellow, Green, Goldenrod…'),
+        row('Date', h('input', { class: 'input', value: rv.date || '', placeholder: today, oninput: (e) => { rv.date = e.target.value; ctx.save(); } }), 'Printed at the top of the pages it changed: Blue Rev. ' + (rv.date || today)),
+        toggle(!!rv.lock, (on) => { if (on){ const nums = sceneNumbers(script.els, fmtOf(script) === 'multicam'); rv.locked = Object.fromEntries(nums); } rv.lock = on; if (on && (set.sceneNumbers || 'off') === 'off'){ set.sceneNumbers = 'both'; ctx.redecorate(); } changed(); }, 'Lock the scene numbers', 'A shooting script: every scene keeps its number; a new one after 12 becomes 12A, 12B.'),
+        toggle(!!rv.colorPages, (on) => { rv.colorPages = on; ctx.save(); }, 'Coloured pages in the PDF', 'The pages it changed, tinted in its colour, as they go out on set.'),
+        toggle(!rv.hide, (on) => { rv.hide = !on; changed(); }, 'Show the asterisks on the page'),
+        row('The PDF', h('div', { class: 'row' },
+          h('button', { class: 'btn', type: 'button', onclick: () => ctx.pdf({ onlyRevised: true, titlePage: false }) }, 'Only the revised pages'),
+          h('button', { class: 'btn', type: 'button', onclick: () => ctx.pdf() }, 'The whole script')), 'The revised pages alone are what goes to the crew.'),
+        row('Next revision', h('button', { class: 'btn', type: 'button', onclick: () => { const i = REVISIONS.findIndex(([k]) => k === rv.color); rv.color = REVISIONS[(i + 1) % REVISIONS.length][0]; rv.date = today; rv.on = true; changed(); draw(); toast(`${REVISIONS.find(([k]) => k === rv.color)[1]} revision`); } }, 'Start the next colour'), 'The marks of this one stay; the next one marks in its own colour.'),
+        row('Clear the marks', h('button', { class: 'btn danger', type: 'button', onclick: () => { if (!marked) return toast('There are no marks.'); if (!confirm(`Clear the ${marked} revision marks? The words stay as they are.`)) return; ctx.setEls(script.els.map(({ rv: _, ...e }) => e), { mark: false }); changed(); draw(); } }, `Clear ${marked} marks`), 'For a clean draft, once a revision is locked in.'),
+      ];
+    },
     look: () => [
       row('The page', segOf(pref('page'), [['white', 'White'], ['sepia', 'Sepia'], ['midnight', 'Midnight']], (k) => setPref('page', k)), 'Midnight is a dark page with light letters; the PDF stays white.'),
       toggle(pref('breaks'), (on) => setPref('breaks', on), 'Show where pages end', 'The edge between two sheets, with the page number.'),
@@ -58,7 +81,7 @@ export function openSettings(ctx, tab = 'script'){
     ],
     keys: () => [h('div', { class: 'keys' }, ...[
       ['Enter', 'The next kind of line'], ['Tab / ⇧Tab', 'Change the kind of line'], [`${navigator.platform.includes('Mac') ? '⌥' : 'Alt+'}1 … 9`, 'Pick a kind (0: Unformatted)'],
-      [`${mod} Z / ⇧${mod} Z`, 'Undo / redo'], [`${mod} F`, 'Find & replace'], [`${mod} ⇧ M`, 'A note on this line'],
+      [`${mod} Z / ⇧${mod} Z`, 'Undo / redo'], [`${mod} B / I / U`, 'Bold, italic, underline'], [`${mod} D`, 'Dual dialogue (on the second character)'], [`${mod} F`, 'Find & replace'], [`${mod} ⇧ M`, 'A note on this line'],
       [`${mod} P`, 'PDF'], [`${mod} ⇧ A`, 'AI'], [`${mod} + / −`, 'Zoom'], ['Right click on a word', 'Tag it, or add a note'],
     ].map(([k, l]) => h('div', { class: 'key-row' }, h('kbd', {}, k), h('span', {}, l))))],
   };
@@ -244,6 +267,9 @@ export function cardsView(ctx){
         h('div', { class: 'card-h' }, h('span', { class: 'sn' }, String(k + 1)), h('button', { type: 'button', class: 'card-t', title: 'Go to this scene', onclick: () => ctx.goTo(s.id, true) }, s.text), h('small', {}, len)),
         syn,
         preview ? h('p', { class: 'card-p' }, preview.length > 160 ? preview.slice(0, 160) + '…' : preview) : null,
+        // who writes this scene (a script shared with other writers)
+        ctx.writers?.().length > 1 ? h('select', { class: 'input card-w', disabled: ctx.readOnly(), onchange: (e) => { if (e.target.value) script.assign[s.id] = e.target.value; else delete script.assign[s.id]; ctx.save(); } },
+          h('option', { value: '' }, 'Writer: anyone'), ...ctx.writers().map((w) => h('option', { value: w, selected: script.assign?.[s.id] === w }, w))) : null,
         h('div', { class: 'card-f' },
           h('div', { class: 'card-colors' }, ...COLORS.map((col) => h('button', { type: 'button', class: 'cdot' + ((c.color || '') === col ? ' on' : ''), style: col ? `background:${col}` : '', title: col ? 'Colour' : 'No colour', onclick: () => { script.cards[s.id] = { ...(script.cards[s.id] || {}), color: col }; ctx.save(); draw(); } }))),
           h('button', { class: 'ib', type: 'button', title: 'Earlier', 'aria-label': 'Earlier', html: I.left, onclick: () => move(k, k - 1) }),
@@ -260,7 +286,8 @@ export function reader(ctx){
   const pill = h('div', { class: 'reader', hidden: true });
   document.body.append(pill);
   let playing = false, paused = false, queue = [], idx = 0, voiceOf = new Map(), lit = null;
-  const stop = () => { playing = false; paused = false; synth?.cancel(); pill.hidden = true; if (lit) delete lit.dataset.reading; lit = null; };
+  let timed = false;
+  const stop = () => { if (timed){ timed = false; ctx.save(); } playing = false; paused = false; synth?.cancel(); pill.hidden = true; if (lit) delete lit.dataset.reading; lit = null; };
   const voicesFor = (lang) => (synth?.getVoices() || []).filter((v) => v.lang?.toLowerCase().startsWith(lang));
   function draw(who){
     pill.hidden = false;
@@ -280,7 +307,11 @@ export function reader(ctx){
     const v = item.voice; if (v){ u.voice = v.voice; u.lang = v.voice?.lang || u.lang; u.pitch = v.pitch; }
     u.lang ||= item.lang;
     u.rate = pref('readRate') || 1;
-    u.onend = () => next(); u.onerror = () => next();
+    // how long each speech really takes, for the running time (Report > Runtime): kept at normal speed
+    let t0 = 0;
+    u.onstart = () => { t0 = performance.now(); };
+    u.onend = () => { if (t0 && item.spoken && !ctx.readOnly()){ (ctx.script.timing ||= {})[item.id] = Math.round((performance.now() - t0) / 1000 * (u.rate || 1) * 10) / 10; timed = true; } next(); };
+    u.onerror = () => next();
     draw(item.who);
     synth.speak(u);
   }
@@ -303,7 +334,7 @@ export function reader(ctx){
       for (const e of els.slice(start)){
         const text = e.x.trim(); if (!text) continue;
         if (e.t === 'character'){ who = cleanName(e.x); continue; }
-        if (e.t === 'dialogue' || e.t === 'lyric') queue.push({ id: e.id, text, who, voice: voiceOf.get(who) || narrator, lang });
+        if (e.t === 'dialogue' || e.t === 'lyric') queue.push({ id: e.id, text, who, voice: voiceOf.get(who) || narrator, lang, spoken: true });
         else if (e.t === 'paren') continue;
         else if (pref('readAction') || e.t === 'scene') queue.push({ id: e.id, text: e.t === 'scene' ? headingSpoken(text, lang) : text, who: e.t === 'scene' ? 'Scene' : 'Action', voice: narrator, lang });
       }
