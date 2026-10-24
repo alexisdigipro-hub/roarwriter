@@ -53,7 +53,7 @@ export function normalize(d){
   s.titlePage = { ...blankScript().titlePage, ...(d?.titlePage || {}) };
   s.settings = { ...blankScript().settings, ...(d?.settings || {}) };
   s.els = (Array.isArray(d?.els) && d.els.length ? d.els : blankScript().els)
-    .filter((e) => e && LABEL[e.t]).map((e) => ({ id: e.id || uid(), t: e.t, x: String(e.x ?? ''), ...(e.rv ? { rv: e.rv } : {}), ...(e.du ? { du: 1 } : {}) }));
+    .filter((e) => e && LABEL[e.t]).map((e) => { const x = String(e.x ?? ''), f = cleanMarks(e.f, x.length); return { id: e.id || uid(), t: e.t, x, ...(e.rv ? { rv: e.rv } : {}), ...(e.du ? { du: 1 } : {}), ...(f.length ? { f } : {}) }; });
   if (!s.els.length) s.els = blankScript().els;
   s.tags = Array.isArray(d?.tags) ? d.tags : [];
   // notes on lines ({ id, el, text, by, at, done }) and the index cards' own words and colours ({ sceneId: { syn, color } })
@@ -67,7 +67,35 @@ export function normalize(d){
   s.pacing = d?.pacing && Array.isArray(d.pacing.scenes) ? d.pacing : null;
   // what the AI wrote about the whole script, kept so it is not asked (and paid for) again: coverage, continuity, package
   s.reports = obj(d?.reports);
+  // the beat board ({ template, items: [{ id, name, desc, scene }] }), the shooting schedule ({ days: [{ id, date, scenes }] })
+  // and who writes which scene ({ sceneId: email })
+  s.beats = obj(d?.beats); s.schedule = obj(d?.schedule); s.assign = obj(d?.assign);
   return s;
+}
+
+/* Bold, italic and underline inside a line (Alex, 25 Oct): e.f = [[from, to, 'b' | 'i' | 'u'], …], kept tidy
+   (each style's ranges sorted, joined where they touch, inside the text) */
+export function cleanMarks(f, len){
+  if (!Array.isArray(f) || !f.length) return [];
+  const out = [];
+  for (const st of ['b', 'i', 'u']){
+    const r = f.filter((m) => Array.isArray(m) && m[2] === st).map(([a, b]) => [Math.max(0, Math.min(len, a | 0)), Math.max(0, Math.min(len, b | 0))]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+    for (const [a, b] of r){ const last = out.length && out[out.length - 1][2] === st ? out[out.length - 1] : null; if (last && a <= last[1]) last[1] = Math.max(last[1], b); else out.push([a, b, st]); }
+  }
+  return out;
+}
+// the marks of the part from a to b, counted from a
+export const sliceMarks = (f, a, b) => cleanMarks((f || []).map(([p, q, st]) => [Math.max(p, a) - a, Math.min(q, b) - a, st]), b - a);
+// the text in pieces, each with its styles
+export function segmentsOf(x, f){
+  if (!f?.length) return [{ text: x, b: false, i: false, u: false }];
+  const cuts = [...new Set([0, x.length, ...f.flatMap(([a, b]) => [a, b])])].filter((c) => c >= 0 && c <= x.length).sort((a, b) => a - b);
+  const out = [];
+  for (let k = 0; k < cuts.length - 1; k++){
+    const a = cuts[k], b = cuts[k + 1], on = (st) => f.some(([p, q, t]) => t === st && p <= a && q >= b);
+    out.push({ text: x.slice(a, b), b: on('b'), i: on('i'), u: on('u') });
+  }
+  return out;
 }
 
 // the scenes, numbered, each with where it starts in the list
@@ -130,7 +158,7 @@ export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCou
 export function mergeScripts(base, mine, theirs){
   base = normalize(base); mine = normalize(mine); theirs = normalize(theirs);
   const B = new Map(base.els.map((e) => [e.id, e])), M = new Map(mine.els.map((e) => [e.id, e]));
-  const same = (a, b) => a && b && a.t === b.t && a.x === b.x && (a.rv || '') === (b.rv || '') && !!a.du === !!b.du;
+  const same = (a, b) => a && b && a.t === b.t && a.x === b.x && (a.rv || '') === (b.rv || '') && !!a.du === !!b.du && JSON.stringify(a.f || []) === JSON.stringify(b.f || []);
   let els = theirs.els.filter((e) => {
     if (M.has(e.id)) return true;
     return !(B.has(e.id) && same(B.get(e.id), e)); // deleted here, untouched there: gone
@@ -160,7 +188,7 @@ export function mergeScripts(base, mine, theirs){
   const keyed = (k) => { const b = base[k] || {}, m = mine[k] || {}, t = theirs[k] || {}, J = JSON.stringify;
     return Object.fromEntries([...new Set([...Object.keys(t), ...Object.keys(m), ...Object.keys(b)])].map((x) => [x, J(m[x]) !== J(b[x]) ? m[x] : t[x]]).filter(([, v]) => v !== undefined)); };
   return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags, notes, cards,
-    boards: keyed('boards'), alts: keyed('alts'), timing: keyed('timing'), revision: keyed('revision'), reports: keyed('reports'), pacing: JSON.stringify(mine.pacing) !== JSON.stringify(base.pacing) ? mine.pacing : theirs.pacing };
+    boards: keyed('boards'), alts: keyed('alts'), timing: keyed('timing'), revision: keyed('revision'), reports: keyed('reports'), beats: keyed('beats'), schedule: keyed('schedule'), assign: keyed('assign'), pacing: JSON.stringify(mine.pacing) !== JSON.stringify(base.pacing) ? mine.pacing : theirs.pacing };
 }
 
 /* Scene numbers: 1, 2, 3 (a sitcom letters them, A, B, C); a comic's pages and a play's scenes count too */

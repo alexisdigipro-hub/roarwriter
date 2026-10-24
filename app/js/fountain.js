@@ -1,4 +1,4 @@
-import { SCENE_START, blankScript, el, normalize, upper } from './model.js';
+import { cleanMarks, segmentsOf, SCENE_START, blankScript, el, normalize, upper } from './model.js';
 
 /* Fountain (fountain.io), the plain-text screenplay format: what RoarWriter reads and writes as .fountain, and
    what the AI answers in. Greek scene headings and names are written with Fountain's forcing marks (. and @)
@@ -65,9 +65,27 @@ export function parseFountain(text){
     while (i < lines.length && lines[i].trim() !== ''){ para.push(lines[i].replace(/^!/, '').trimEnd()); i++; }
     els.push(el('action', para.join('\n')));
   }
-  s.els = els.length ? els : blankScript().els;
+  s.els = (els.length ? els : blankScript().els).map(emphasis);
   return normalize(s);
 }
+
+/* Fountain's emphasis: ***bold italic***, **bold**, *italic*, _underline_ become the line's marks */
+function emphasis(e){
+  if (['scene', 'character', 'transition'].includes(e.t) || !/[*_]/.test(e.x)) return e;
+  const f = [];
+  let x = e.x;
+  for (const [re, st] of [[/\*\*\*(\S(?:[^*\n]*?\S)?)\*\*\*/, ['b', 'i']], [/\*\*(\S(?:[^*\n]*?\S)?)\*\*/, ['b']], [/\*(\S(?:[^*\n]*?\S)?)\*/, ['i']], [/(?<![\p{L}\p{N}])_(\S(?:[^_\n]*?\S)?)_(?![\p{L}\p{N}])/u, ['u']]]){
+    for (let m = x.match(re); m; m = x.match(re)){
+      const a = m.index, inner = m[1], cut = m[0].length - inner.length, lead = m[0].indexOf(inner);
+      // what comes after moves back by the markers taken out
+      for (const r of f){ if (r[0] > a) r[0] -= r[0] >= a + lead + inner.length ? cut : lead; if (r[1] > a) r[1] -= r[1] >= a + lead + inner.length ? cut : lead; }
+      x = x.slice(0, a) + inner + x.slice(a + m[0].length);
+      for (const st2 of st) f.push([a, a + inner.length, st2]);
+    }
+  }
+  return f.length ? { ...e, x, f: cleanMarks(f, x.length) } : e;
+}
+const emph = (e, x) => (e.f?.length ? segmentsOf(x, e.f).map((g) => { let t = g.text; if (!t.trim()) return t; if (g.b && g.i) t = `***${t}***`; else if (g.b) t = `**${t}**`; else if (g.i) t = `*${t}*`; if (g.u) t = `_${t}_`; return t; }).join('') : x);
 
 // just the elements, for pasting and for the AI's answers
 export const fountainToEls = (text) => parseFountain(String(text || '').replace(/^```[a-z]*\n?|```\s*$/gm, '')).els.filter((e) => e.x.trim());
@@ -102,8 +120,8 @@ export function toFountain(script, { titlePage = true } = {}){
     else if (e.t === 'lyric') out.push(...x.split('\n').map((l) => '~' + l));
     else if (['sound', 'music', 'page', 'panel', 'caption'].includes(e.t)) out.push('!' + upper(x));
     else if (e.t === 'video' || e.t === 'audio') out.push(`!${e.t.toUpperCase()}: ${x}`);
-    else if (e.t === 'action' && (isUpperLine(x) || SCENE_START.test(x))) out.push('!' + x);
-    else out.push(x);
+    else if (e.t === 'action' && (isUpperLine(x) || SCENE_START.test(x))) out.push('!' + emph(e, x));
+    else out.push(emph(e, x));
   });
   return out.join('\n') + '\n';
 }

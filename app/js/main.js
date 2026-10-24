@@ -1,6 +1,6 @@
 import { addShare, authMessage, askAI, currentUser, listShares, myRole, onAuth, recover, removeShare, setShareRole, signIn, signOut, signUp } from './cloud.js';
 import { createStore } from './store.js';
-import { cleanName as cleanNameOf, blankScript, charactersOf, isGreek, metaOf, normalize, pageCount, scenesOf, upper } from './model.js';
+import { REVISIONS, cleanName as cleanNameOf, blankScript, charactersOf, isGreek, metaOf, normalize, pageCount, scenesOf, upper } from './model.js';
 import { Editor } from './editor.js';
 import { fountainToEls, parseFountain, toFountain } from './fountain.js';
 import { parseFdx, toFdx } from './fdx.js';
@@ -275,6 +275,12 @@ async function viewScript(id){
   const scenesBtn = h('button', { class: 'btn narrow-only', type: 'button', title: 'Scenes and characters', 'aria-label': 'Scenes and characters', onclick: () => openSide() }, h('span', { html: I.scenes }));
   const moreBtn = h('button', { class: 'btn phone-only', type: 'button', title: 'More', 'aria-label': 'More', onclick: () => moreMenu() }, h('span', { html: I.more }));
   const roChip = h('span', { class: 'chip ro', hidden: true }, 'View only');
+  // Revision mode on: its colour in the bar, a click opens its settings
+  const revChip = h('button', { type: 'button', class: 'chip rev wide-only', hidden: true, onclick: () => openSettings(ctx, 'revisions') });
+  const showRev = () => { const r = script.revision || {}, c = REVISIONS.find(([k]) => k === r.color); revChip.hidden = !(r.on && c); if (c) { revChip.style.setProperty('--rv', c[2]); revChip.textContent = `${c[1]} Rev.`; } };
+  // bold, italic, underline (and Cmd/Ctrl+B, I, U)
+  const fmtBtn = (st, label, key) => h('button', { type: 'button', class: 'fb-' + st, title: `${label} (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}${key})`, 'aria-label': label, onmousedown: (e) => { e.preventDefault(); if (role !== 'view') editor.format(st); } }, st.toUpperCase());
+  const fmtPill = h('div', { class: 'fmt-pill wide-only' }, fmtBtn('b', 'Bold', 'B'), fmtBtn('i', 'Italic', 'I'), fmtBtn('u', 'Underline', 'U'));
   /* the bar (Alex, 24 Oct: tidier): on the left what is being written (the title, the kind of line, the pages,
      Page or Cards), on the right the tools as round icons with their names on hover (find, read aloud,
      breakdown, share, export, AI, settings) */
@@ -283,7 +289,7 @@ async function viewScript(id){
   const bar = h('header', { class: 'top edit-top' },
     h('a', { class: 'ib', href: '#', title: 'All scripts', 'aria-label': 'All scripts', html: I.back }),
     h('div', { class: 'title-box' }, titleIn, h('div', { class: 'title-sub' }, pagesSub, ' · ', saveSub)), roChip,
-    typeBtn, pages, viewSeg, h('div', { class: 'spacer' }), saveState,
+    typeBtn, fmtPill, revChip, pages, viewSeg, h('div', { class: 'spacer' }), saveState,
     iconBtn(I.find, 'Find & replace', () => openFind()),
     iconBtn(I.speak, 'Read aloud', () => readAloud()),
     h('button', { class: 'btn wide-only', type: 'button', onclick: () => showBreakdown() }, h('span', { html: I.tag }), h('span', { class: 'lbl' }, 'Breakdown')),
@@ -372,6 +378,7 @@ async function viewScript(id){
   const tagBtn = h('button', { class: 'btn primary tag-btn', type: 'button', onmousedown: (e) => e.preventDefault(), onclick: () => { const r = tagBtn.getBoundingClientRect(); tagMenu(r.left, r.top, true); } }, h('span', { html: I.tag }), 'Tag');
   const kindBar = h('div', { class: 'kindbar' },
     tagBtn,
+    h('div', { class: 'fmt-pill kb-fmt' }, ...['b', 'i', 'u'].map((st) => h('button', { type: 'button', class: 'fb-' + st, 'aria-label': { b: 'Bold', i: 'Italic', u: 'Underline' }[st], onmousedown: (e) => e.preventDefault(), onclick: () => editor.format(st) }, st.toUpperCase()))),
     h('button', { class: 'ib', type: 'button', title: 'Undo', 'aria-label': 'Undo', html: I.undo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doUndo() }),
     kinds,
     h('button', { class: 'ib', type: 'button', title: 'Redo', 'aria-label': 'Redo', html: I.redo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doRedo() }));
@@ -393,10 +400,13 @@ async function viewScript(id){
       if (eid !== caretId){ caretId = eid; clearTimeout(sideT); sideT = setTimeout(drawSide, 120); here(); }
     },
   });
+  editor.onDualMiss = () => toast('Put the cursor on the second character (or their lines): they speak at the same time as the one before.');
   /* what the tools around the page need (tools.js) */
   const ctx = {
     script, editor: () => editor, save, zoom,
-    setEls: (els) => { editor.setEls(els); editor.commit(true); },
+    // a change made by a tool (rename, cards, an alternate): marked as a revision too, unless it clears the marks
+    setEls: (els, { mark = true } = {}) => { editor.setEls(els, { mark }); editor.commit(true); },
+    pdf: (opts) => pdf(opts), revisionChanged: () => { showRev(); markPages(); },
     goTo: (id, page) => goTo(id, page),
     redecorate: () => { paper.dataset.sn = script.settings.sceneNumbers || 'off'; paper.dataset.names = script.settings.names || 'fd'; markPages(); here(); },
     setFormat: (k) => setFormat(k), setPage: (k) => setPage(k), titlePage: () => titlePage(),
@@ -404,6 +414,7 @@ async function viewScript(id){
     readOnly: () => role === 'view',
     notesChanged: () => { notes.place(); if (side === 'notes') drawSide(); },
   };
+  showRev();
   paper.dataset.sn = script.settings.sceneNumbers || 'off';
   paper.dataset.names = script.settings.names || 'fd';
   const finder = findBar(ctx, mid);
@@ -470,14 +481,30 @@ async function viewScript(id){
         const n = starts.get(p.dataset.id); if (n && pref('breaks')) p.dataset.pg = n; else delete p.dataset.pg;
         const sn = deco.nums.get(p.dataset.id); if (sn) p.dataset.n = sn; else delete p.dataset.n;
         if (deco.contd.has(p.dataset.id)) p.dataset.contd = '1'; else delete p.dataset.contd;
+        const du = deco.dual.get(p.dataset.id); if (du) p.dataset.dual = du; else delete p.dataset.dual;
       }
       here();
       if (!paper.contains(breaks)) paper.append(breaks);
-      requestAnimationFrame(() => { placeBreaks(); notes.place(); });
+      requestAnimationFrame(() => { alignDual(); placeBreaks(); notes.place(); });
       finder.refresh();
     }, 400);
   }
-  const placeBreaks = () => editor && breaks.replaceChildren(...[...editor.box.querySelectorAll('p[data-pg]')].map((p) => h('div', { class: 'pb', style: `top:${p.offsetTop}px` }, h('span', {}, `${p.dataset.pg}.`))));
+  /* dual dialogue: the second speaker's block starts level with the first one's (a float cannot go above the one
+     before it, so it is pulled up by the difference) */
+  const alignDual = () => {
+    if (!editor) return;
+    for (const p of editor.box.querySelectorAll('p[style*="margin-top"]')) p.style.marginTop = '';
+    for (const r of editor.box.querySelectorAll('p[data-dual=R]')){
+      if (r.previousElementSibling?.dataset.dual !== 'L') continue;
+      let l = r.previousElementSibling; while (l.previousElementSibling?.dataset.dual === 'L') l = l.previousElementSibling;
+      const d = r.offsetTop - l.offsetTop;
+      if (d > 0) r.style.marginTop = `${parseFloat(getComputedStyle(r).marginTop) - d}px`;
+    }
+  };
+  /* the revision's asterisks in the right margin, each in the colour of the revision that changed the line */
+  const placeBreaks = () => editor && breaks.replaceChildren(
+    ...[...editor.box.querySelectorAll('p[data-pg]')].map((p) => h('div', { class: 'pb', style: `top:${p.offsetTop}px` }, h('span', {}, `${p.dataset.pg}.`))),
+    ...(script.revision?.hide ? [] : [...editor.box.querySelectorAll('p[data-rv]')].map((p) => h('div', { class: 'rvm', style: `top:${p.offsetTop}px;height:${p.offsetHeight}px;--rv:${REVISIONS.find(([k]) => k === p.dataset.rv)?.[2] || '#888'}`, title: `${REVISIONS.find(([k]) => k === p.dataset.rv)?.[1] || ''} revision` }, '*'))));
   // a wider or narrower window, or the zoom, moves the lines: the gaps follow
   const sizeWatch = new ResizeObserver(() => requestAnimationFrame(() => { placeBreaks(); notes.place(); }));
   sizeWatch.observe(paper);
@@ -498,6 +525,8 @@ async function viewScript(id){
   const offWatch = store.watch(id, (data) => {
     if (!editor) return;
     script.title = data.title; Object.assign(script.titlePage, data.titlePage); Object.assign(script.settings, data.settings); script.tags = normalizeTags(data.tags); script.notes = data.notes || []; script.cards = data.cards || {};
+    for (const k of ['boards', 'alts', 'timing', 'revision', 'reports', 'beats', 'schedule', 'assign']) script[k] = data[k] || {};
+    script.pacing = data.pacing || null; showRev();
     editor.setEls(data.els);
     if (view === 'cards') cards.draw();
     if (document.activeElement !== titleIn) titleIn.value = script.title || '';
@@ -588,6 +617,7 @@ async function viewScript(id){
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
     const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...kindsOf(script).map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (navigator.platform.includes('Mac') ? '⌥' : 'Alt+') + n))),
+      h('button', { type: 'button', class: 'menu-sep', onmousedown: (e) => { e.preventDefault(); menu.remove(); const on = editor.toggleDual(); if (on === false) editor.onDualMiss(); else toast(on ? 'Dual dialogue' : 'Dual dialogue off'); } }, h('span', {}, 'Dual dialogue'), h('kbd', {}, (navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+') + 'D')),
       h('p', { class: 'menu-hint' }, 'Enter goes on to what usually comes next. Tab changes the kind.'));
     showMenu(menu);
   }

@@ -552,3 +552,27 @@ body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,
   .auth{padding:calc(28px + env(safe-area-inset-top)) 16px 28px;justify-content:flex-start}
   .ai-quick .btn{height:42px;font-size:13.5px}
 }
+
+/* ---------- revisions, dual dialogue, bold / italic / underline (Oct 2026) ---------- */
+.btn.danger{color:#ff8a80}
+.rvm{position:absolute;right:calc(1in - 22px);width:14px;font:700 13pt/1 var(--mono);color:var(--rv);text-align:center;pointer-events:auto}
+.chip.rev{gap:6px;border:0;color:var(--text);background:color-mix(in srgb,var(--rv) 22%,transparent);cursor:pointer;font-weight:600}
+.chip.rev::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--rv)}
+.rv-colors{display:flex;flex-wrap:wrap;gap:6px;max-width:420px}
+.rv-c{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px 0 8px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);font-size:12.5px;font-weight:600;color:var(--muted)}
+.rv-c i{width:12px;height:12px;border-radius:50%;background:var(--rv)}
+.rv-c.on{color:var(--text);border-color:var(--rv);background:color-mix(in srgb,var(--rv) 18%,transparent)}
+.fmt-pill{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--glass);border:1px solid var(--edge)}
+.fmt-pill button{width:30px;height:30px;border:0;border-radius:50%;background:none;color:var(--text);font:700 14px var(--ui)}
+.fmt-pill button:hover{background:rgba(255,255,255,.1)}
+.fmt-pill .fb-i{font-style:italic;font-weight:500;font-family:Georgia,serif} .fmt-pill .fb-u{text-decoration:underline;font-weight:500}
+.kb-fmt{display:none}
+.kindbar.sel .kb-fmt{display:inline-flex;flex:none}
+.kindbar.sel .kb-fmt button{width:34px;height:34px}
+.script b,.script strong{font-weight:700} .script u{text-decoration:underline}
+/* two people speaking at once: their blocks side by side */
+.script p[data-dual=L],.script p[data-dual=R]{width:47%!important;margin-left:0!important;box-sizing:border-box}
+.script p[data-dual=L]{float:left;clear:left} .script p[data-dual=R]{float:right;clear:right}
+.script p[data-t=character][data-dual]{padding-left:22%} .script p[data-t=paren][data-dual]{padding-left:10%}
+.script p[data-dual=C]{clear:both}
+@media (max-width:1300px){ .fmt-pill.wide-only{display:none} }
