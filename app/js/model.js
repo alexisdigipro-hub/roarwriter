@@ -1,0 +1,104 @@
+/* The script as data: a title page and a list of elements, each { id, t (type), x (text) }. The same list is
+   what the editor draws, what the scenes and characters come from, and what Fountain, Final Draft and the PDF
+   are made of. */
+
+export const TYPES = [
+  ['scene', 'Scene Heading', '1'],
+  ['action', 'Action', '2'],
+  ['character', 'Character', '3'],
+  ['paren', 'Parenthetical', '4'],
+  ['dialogue', 'Dialogue', '5'],
+  ['transition', 'Transition', '6'],
+  ['shot', 'Shot', '7'],
+];
+export const LABEL = Object.fromEntries(TYPES.map(([k, l]) => [k, l]));
+
+// Enter at the end of an element: what comes next, as in Final Draft
+export const NEXT = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'character', transition: 'scene', shot: 'action' };
+// Tab / Shift+Tab: the element turns into the next / previous kind
+const CYCLE = ['action', 'character', 'transition', 'scene', 'shot'];
+export function tabType(t, back = false){
+  if (t === 'dialogue') return back ? 'character' : 'paren';
+  if (t === 'paren') return back ? 'dialogue' : 'dialogue';
+  const i = CYCLE.indexOf(t);
+  return CYCLE[(i + (back ? CYCLE.length - 1 : 1)) % CYCLE.length];
+}
+
+export const uid = () => (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10));
+export const el = (t, x = '') => ({ id: uid(), t, x });
+
+// A scene heading in English or Greek: INT. / EXT. / INT./EXT. / I/E / EST. / ΕΣΩΤ. / ΕΞΩΤ.
+export const SCENE_START = /^(INT\.?\/EXT|EXT\.?\/INT|INT|EXT|EST|I\/E|ΕΣΩΤ\.?\/ΕΞΩΤ|ΕΣΩΤ|ΕΞΩΤ|ΕΣ\.|ΕΞ\.)[\.\s]/i;
+export const TIMES = ['DAY', 'NIGHT', 'MORNING', 'EVENING', 'CONTINUOUS', 'LATER', 'ΜΕΡΑ', 'ΝΥΧΤΑ', 'ΠΡΩΙ', 'ΑΠΟΓΕΥΜΑ', 'ΣΟΥΡΟΥΠΟ', 'ΣΥΝΕΧΕΙΑ', 'ΑΡΓΟΤΕΡΑ'];
+
+export const upper = (s) => String(s || '').toLocaleUpperCase('el-GR');
+export const isGreek = (s) => /[Ͱ-Ͽἀ-῿]/.test(s || '');
+
+export function blankScript(title = 'Untitled'){
+  return {
+    v: 1,
+    title,
+    titlePage: { title, credit: 'Written by', author: '', contact: '', draftDate: '' },
+    settings: { page: 'a4' },
+    els: [el('scene', '')],
+  };
+}
+
+export function normalize(d){
+  const s = { ...blankScript(), ...(d || {}) };
+  s.titlePage = { ...blankScript().titlePage, ...(d?.titlePage || {}) };
+  s.settings = { ...blankScript().settings, ...(d?.settings || {}) };
+  s.els = (Array.isArray(d?.els) && d.els.length ? d.els : blankScript().els)
+    .filter((e) => e && LABEL[e.t]).map((e) => ({ id: e.id || uid(), t: e.t, x: String(e.x ?? '') }));
+  if (!s.els.length) s.els = blankScript().els;
+  return s;
+}
+
+// the scenes, numbered, each with where it starts in the list
+export function scenesOf(els){
+  const out = [];
+  els.forEach((e, i) => { if (e.t === 'scene') out.push({ n: out.length + 1, i, id: e.id, text: upper(e.x).trim() || 'NEW SCENE' }); });
+  return out;
+}
+
+// the characters: a name without its extension, (V.O.), (O.S.), (CONT'D)
+export const cleanName = (x) => upper(x).replace(/\s*\(.*?\)\s*/g, ' ').replace(/\^$/, '').trim();
+export function charactersOf(els){
+  const map = new Map();
+  let scene = 0;
+  els.forEach((e, i) => {
+    if (e.t === 'scene') scene++;
+    if (e.t !== 'character') return;
+    const name = cleanName(e.x);
+    if (!name) return;
+    const c = map.get(name) || { name, lines: 0, words: 0, scenes: new Set(), first: i };
+    c.lines++;
+    for (let j = i + 1; j < els.length && (els[j].t === 'dialogue' || els[j].t === 'paren'); j++) if (els[j].t === 'dialogue') c.words += els[j].x.trim().split(/\s+/).filter(Boolean).length;
+    c.scenes.add(scene);
+    map.set(name, c);
+  });
+  return [...map.values()].map((c) => ({ ...c, scenes: c.scenes.size })).sort((a, b) => b.lines - a.lines || a.name.localeCompare(b.name));
+}
+
+// the place of a scene heading, for suggestions: INT. HOUSE - NIGHT -> HOUSE
+export function placesOf(els){
+  const set = new Set();
+  els.forEach((e) => { if (e.t !== 'scene') return; const m = upper(e.x).replace(SCENE_START, '').replace(/^[\.\s/]+/, '').split(/\s+[-–—]\s+/)[0].trim(); if (m) set.add(m); });
+  return [...set];
+}
+
+/* Pages by the industry rule of thumb (55 lines a page, Courier 12): how many lines each element takes at its
+   width, with the blank line before it. Good for the count in the bar; the PDF lays the pages out for real. */
+const WIDTH = { scene: 61, action: 61, character: 38, paren: 25, dialogue: 35, transition: 61, shot: 61 };
+const GAP = { scene: 2, action: 1, character: 1, paren: 0, dialogue: 0, transition: 1, shot: 1 };
+export function pageCount(els){
+  let lines = 0;
+  els.forEach((e, i) => {
+    const text = e.x || ' ';
+    const n = text.split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length / WIDTH[e.t])), 0);
+    lines += n + (i ? GAP[e.t] : 0);
+  });
+  return Math.max(1, Math.ceil(lines / 55));
+}
+
+export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length });
