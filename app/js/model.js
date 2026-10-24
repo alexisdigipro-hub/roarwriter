@@ -53,12 +53,20 @@ export function normalize(d){
   s.titlePage = { ...blankScript().titlePage, ...(d?.titlePage || {}) };
   s.settings = { ...blankScript().settings, ...(d?.settings || {}) };
   s.els = (Array.isArray(d?.els) && d.els.length ? d.els : blankScript().els)
-    .filter((e) => e && LABEL[e.t]).map((e) => ({ id: e.id || uid(), t: e.t, x: String(e.x ?? '') }));
+    .filter((e) => e && LABEL[e.t]).map((e) => ({ id: e.id || uid(), t: e.t, x: String(e.x ?? ''), ...(e.rv ? { rv: e.rv } : {}), ...(e.du ? { du: 1 } : {}) }));
   if (!s.els.length) s.els = blankScript().els;
   s.tags = Array.isArray(d?.tags) ? d.tags : [];
   // notes on lines ({ id, el, text, by, at, done }) and the index cards' own words and colours ({ sceneId: { syn, color } })
   s.notes = Array.isArray(d?.notes) ? d.notes.filter((n) => n && n.id && n.el) : [];
   s.cards = d?.cards && typeof d.cards === 'object' && !Array.isArray(d.cards) ? d.cards : {};
+  // each scene's storyboard frames ({ sceneId: [{ id, size, angle, move, desc, img }] }) and its other versions
+  // ({ sceneId: [{ id, name, at, els }] }), the revision being written ({ on, color, date, locked: { sceneId: '12' } }),
+  // the AI's reading of the pace and the seconds each line took read aloud
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  s.boards = obj(d?.boards); s.alts = obj(d?.alts); s.revision = obj(d?.revision); s.timing = obj(d?.timing);
+  s.pacing = d?.pacing && Array.isArray(d.pacing.scenes) ? d.pacing : null;
+  // what the AI wrote about the whole script, kept so it is not asked (and paid for) again: coverage, continuity, package
+  s.reports = obj(d?.reports);
   return s;
 }
 
@@ -122,7 +130,7 @@ export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCou
 export function mergeScripts(base, mine, theirs){
   base = normalize(base); mine = normalize(mine); theirs = normalize(theirs);
   const B = new Map(base.els.map((e) => [e.id, e])), M = new Map(mine.els.map((e) => [e.id, e]));
-  const same = (a, b) => a && b && a.t === b.t && a.x === b.x;
+  const same = (a, b) => a && b && a.t === b.t && a.x === b.x && (a.rv || '') === (b.rv || '') && !!a.du === !!b.du;
   let els = theirs.els.filter((e) => {
     if (M.has(e.id)) return true;
     return !(B.has(e.id) && same(B.get(e.id), e)); // deleted here, untouched there: gone
@@ -148,16 +156,46 @@ export function mergeScripts(base, mine, theirs){
     return JSON.stringify(m) !== JSON.stringify(b) ? m : t;
   }).filter(Boolean);
   const cards = fields(base.cards || {}, mine.cards || {}, theirs.cards || {});
-  return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags, notes, cards };
+  // (each entry compared by what it holds: a scene's frames, its alternates, a report)
+  const keyed = (k) => { const b = base[k] || {}, m = mine[k] || {}, t = theirs[k] || {}, J = JSON.stringify;
+    return Object.fromEntries([...new Set([...Object.keys(t), ...Object.keys(m), ...Object.keys(b)])].map((x) => [x, J(m[x]) !== J(b[x]) ? m[x] : t[x]]).filter(([, v]) => v !== undefined)); };
+  return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags, notes, cards,
+    boards: keyed('boards'), alts: keyed('alts'), timing: keyed('timing'), revision: keyed('revision'), reports: keyed('reports'), pacing: JSON.stringify(mine.pacing) !== JSON.stringify(base.pacing) ? mine.pacing : theirs.pacing };
 }
 
 /* Scene numbers: 1, 2, 3 (a sitcom letters them, A, B, C); a comic's pages and a play's scenes count too */
-export function sceneNumbers(els, letters = false){
+export function sceneNumbers(els, letters = false, locked = null){
   const out = new Map(); let n = 0;
   const L = (k) => { let s = ''; for (k++; k > 0; k = Math.floor((k - 1) / 26)) s = String.fromCharCode(65 + ((k - 1) % 26)) + s; return s; };
+  if (locked && Object.keys(locked).length){
+    // locked numbers (a shooting script): a scene keeps its number; a new one after 12 is 12A, 12B…, before the first A1
+    let last = '', added = 0;
+    const first = els.find((e) => e.t === 'scene' && locked[e.id]);
+    for (const e of els) if (e.t === 'scene'){
+      if (locked[e.id]){ last = locked[e.id]; added = 0; out.set(e.id, last); }
+      else { out.set(e.id, last ? last + L(added) : L(added) + (first ? locked[first.id] : '1')); added++; }
+    }
+    return out;
+  }
   for (const e of els) if (e.t === 'scene'){ out.set(e.id, letters ? L(n) : String(n + 1)); n++; }
   return out;
 }
+/* Dual dialogue: a character marked du speaks at the same time as the one before; their blocks sit side by side */
+export function dualOf(els){
+  const out = new Map(); // id -> 'L' | 'R' (and 'C' for the line after the pair, which clears it)
+  const blockAt = (i) => { const ids = [els[i].id]; for (let k = i + 1; k < els.length && ['dialogue', 'paren', 'lyric'].includes(els[k].t); k++) ids.push(els[k].id); return ids; };
+  els.forEach((e, i) => {
+    if (e.t !== 'character' || !e.du) return;
+    let j = i - 1; while (j >= 0 && ['dialogue', 'paren', 'lyric'].includes(els[j].t)) j--;
+    if (j < 0 || els[j].t !== 'character') return;
+    blockAt(j).forEach((id) => out.set(id, 'L'));
+    const r = blockAt(i); r.forEach((id) => out.set(id, 'R'));
+    const after = els[i + r.length]; if (after && !out.has(after.id)) out.set(after.id, 'C');
+  });
+  return out;
+}
+// the colours of the revisions, in the order the industry uses them
+export const REVISIONS = [['blue', 'Blue', '#4a90e2'], ['pink', 'Pink', '#f48fb1'], ['yellow', 'Yellow', '#f2c230'], ['green', 'Green', '#5cb85c'], ['goldenrod', 'Goldenrod', '#daa520'], ['buff', 'Buff', '#d8b98a'], ['salmon', 'Salmon', '#fa8072'], ['cherry', 'Cherry', '#d2042d'], ['tan', 'Tan', '#c8a97e']];
 /* (CONT'D): a character who speaks again in the same scene with only action between, as Final Draft adds it */
 export function contdOf(els){
   const out = new Set(); let last = '';

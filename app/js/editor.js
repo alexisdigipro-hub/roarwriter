@@ -54,12 +54,26 @@ export class Editor {
     p.className = 'e';
     p.dataset.t = e.t;
     p.dataset.id = e.id;
+    if (e.rv) p.dataset.rv = e.rv;
+    if (e.du) p.dataset.du = '1';
     if (e.x) p.textContent = e.x; else p.appendChild(document.createElement('br'));
     return p;
   }
   render(els){ this.box.replaceChildren(...els.map((e) => this.node(e))); }
   textOf(p){ return (p.innerText || '').replace(/ /g, ' ').replace(/\n$/, ''); }
-  read(){ return [...this.box.children].map((p) => ({ id: p.dataset.id || uid(), t: p.dataset.t || 'action', x: this.textOf(p) })); }
+  read(){ return [...this.box.children].map((p) => ({ id: p.dataset.id || uid(), t: p.dataset.t || 'action', x: this.textOf(p), ...(p.dataset.rv ? { rv: p.dataset.rv } : {}), ...(p.dataset.du ? { du: 1 } : {}) })); }
+  /* Revision mode: a line written or changed while it is on carries the revision's colour (an asterisk in the
+     margin, as a production draft has them) */
+  markRevision(els, before){
+    const col = this.script.revision?.on ? this.script.revision.color : '';
+    if (!col) return els;
+    const prev = new Map(before.map((e) => [e.id, e]));
+    for (const e of els){
+      const p = prev.get(e.id);
+      if ((!p || p.t !== e.t || p.x !== e.x) && e.x.trim()){ e.rv = col; const n = this.box.querySelector(`p[data-id="${CSS.escape(e.id)}"]`); if (n) n.dataset.rv = col; }
+    }
+    return els;
+  }
   // what a browser leaves behind after typing over several elements or pasting: put right
   /* Safari can leave the caret just outside an empty line, so a letter typed lands in the page itself, not in a
      line (Alex, 24 Oct: every letter of a dialogue became a line of its own). Such text goes back into the line
@@ -102,7 +116,7 @@ export class Editor {
     if (back) this.place(back[0], back[1]);
   }
   commit(structural = false){
-    this.script.els = this.read();
+    this.script.els = this.markRevision(this.read(), this.script.els || []);
     this.snapshot(structural);
     this.onChange(this.script);
   }
@@ -180,6 +194,16 @@ export class Editor {
     this.suggest();
   }
   setCurrentType(t){ const p = this.current() || this.box.lastElementChild; this.setType(p, t); }
+  /* Dual dialogue: the character with the caret (or the one whose speech it is in) speaks at the same time as the
+     one before; again, and it speaks on its own */
+  toggleDual(){
+    let p = this.current();
+    while (p && ['dialogue', 'paren', 'lyric'].includes(p.dataset.t)) p = p.previousElementSibling;
+    if (!p || p.dataset.t !== 'character') return false;
+    if (p.dataset.du) delete p.dataset.du; else p.dataset.du = '1';
+    this.commit(true);
+    return !!p.dataset.du;
+  }
 
   /* ---------- keys ---------- */
   key(e){
@@ -200,6 +224,7 @@ export class Editor {
     if (mod && !e.altKey && !e.shiftKey && digit != null){ const k = kindsOf(this.script).find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
     if (mod && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); return; }
     if (mod && e.key === 'y'){ e.preventDefault(); this.doRedo(); return; }
+    if (mod && !e.shiftKey && (e.code === 'KeyD' || e.key === 'd')){ e.preventDefault(); if (this.toggleDual() === false) this.onDualMiss?.(); return; }
     if (e.key === 'Tab'){ e.preventDefault(); const p = this.current(); if (p) this.setType(p, tabOf(this.script, p.dataset.t, e.shiftKey)); return; }
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); this.enter(); return; }
     if (e.key === 'Enter' && e.shiftKey){ e.preventDefault(); document.execCommand('insertLineBreak'); return; }
@@ -280,8 +305,9 @@ export class Editor {
     if (back) this.place(back, this.textOf(back).length);
   }
   // the script as someone else changed it (Collaborate): the page is redrawn and the caret stays where it was
-  setEls(els){
+  setEls(els, { mark = false } = {}){
     const p = this.current(), id = p?.dataset.id, at = p ? this.offset(p) : 0, had = document.activeElement === this.box;
+    if (mark) els = this.markRevision(els.map((e) => ({ ...e })), this.script.els || []);
     this.render(els);
     this.script.els = els;
     this.snapshot(true);

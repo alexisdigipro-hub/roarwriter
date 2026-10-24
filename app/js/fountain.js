@@ -46,7 +46,7 @@ export function parseFountain(text){
     if (/^!/.test(line)){ const x = line.slice(1); const k = /^(PAGE|ΣΕΛΙΔΑ)\s+\S/i.test(x) ? 'page' : /^(PANEL|ΚΑΡΕ)\s+\S/i.test(x) ? 'panel' : /^(SFX|SOUND|ΗΧΟΣ)\b/i.test(x) ? 'sound' : /^(MUSIC|ΜΟΥΣΙΚΗ)\b/i.test(x) ? 'music' : /^CAPTION\b/i.test(x) ? 'caption' : /^VIDEO:/i.test(x) ? 'video' : /^AUDIO:/i.test(x) ? 'audio' : 'action'; els.push(el(k, k === 'video' || k === 'audio' ? x.replace(/^\w+:\s*/, '') : x)); i++; continue; }
     // a character: @forced, or an all-capital line with something under it
     if ((/^@/.test(line) || (isUpperLine(line.replace(/\(.*?\)/g, '')) && !/^[\d\p{P}\p{S}\s]+$/u.test(line))) && blankAt(i - 1) && !blankAt(i + 1)){
-      els.push(el('character', line.replace(/^@/, '').replace(/\s*\^$/, '')));
+      els.push({ ...el('character', line.replace(/^@/, '').replace(/\s*\^$/, '')), ...(/\^$/.test(line) ? { du: 1 } : {}) });
       i++;
       while (i < lines.length && lines[i].trim() !== ''){
         const d = lines[i].trim();
@@ -93,7 +93,7 @@ export function toFountain(script, { titlePage = true } = {}){
     const tight = ['dialogue', 'paren', 'lyric'].includes(e.t) && prev && ['character', 'dialogue', 'paren', 'lyric'].includes(prev.t);
     if (i && !tight) out.push('');
     if (e.t === 'scene') out.push(SCENE_START.test(upper(x)) && !/[Ͱ-Ͽ]/.test(x) ? upper(x) : '.' + upper(x));
-    else if (e.t === 'character') out.push(/^[A-Z0-9 ().'’-]+$/.test(upper(x)) && /[A-Z]/.test(upper(x)) ? upper(x) : '@' + upper(x));
+    else if (e.t === 'character') out.push((/^[A-Z0-9 ().'’-]+$/.test(upper(x)) && /[A-Z]/.test(upper(x)) ? upper(x) : '@' + upper(x)) + (e.du ? ' ^' : ''));
     else if (e.t === 'transition') out.push(/TO:$/.test(upper(x)) && !/[Ͱ-Ͽ]/.test(x) ? upper(x) : '> ' + upper(x));
     else if (e.t === 'paren') out.push(/^\(.*\)$/.test(x.trim()) ? x.trim() : `(${x.trim()})`);
     else if (e.t === 'shot') out.push('!' + upper(x));

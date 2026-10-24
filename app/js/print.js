@@ -1,4 +1,4 @@
-import { contdOf, sceneNumbers, upper } from './model.js';
+import { REVISIONS, contdOf, dualOf, sceneNumbers, upper } from './model.js';
 import { breaksBefore, fmtOf, formatCSS } from './formats.js';
 
 /* The script laid out on real pages, as the industry format has it (Courier 12, 1.5" left, 1" right, top and
@@ -18,6 +18,15 @@ export const PRINT_CSS = `
 .rwprint[data-sn=left] .p.scene::before,.rwprint[data-sn=both] .p.scene::before{content:attr(data-n);position:absolute;left:-.75in}
 .rwprint[data-sn=right] .p.scene::after,.rwprint[data-sn=both] .p.scene::after{content:attr(data-n);position:absolute;right:-.6in}
 .rwprint .hd{position:absolute;top:.5in;left:1.5in;font:inherit}
+.rwprint .rvh{position:absolute;top:.5in;right:1.6in;font:inherit;text-transform:uppercase}
+.rwprint .p[data-rv]::after{content:'*';position:absolute;right:-.45in;top:0}
+.rwprint[data-sn=right] .p.scene[data-rv]::after,.rwprint[data-sn=both] .p.scene[data-rv]::after{content:attr(data-n) ' *'}
+.rwprint .p[data-dual=L]{float:left;clear:left;width:47%!important}
+.rwprint .p[data-dual=R]{float:right;clear:right;width:47%!important}
+.rwprint .p[data-dual]{margin-left:0!important}
+.rwprint .p.character[data-dual]{padding-left:22%;box-sizing:border-box}
+.rwprint .p.paren[data-dual]{padding-left:10%;box-sizing:border-box}
+.rwprint .p[data-dual=C]{clear:both;float:none;width:auto!important}
 .rwprint .wm{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;font:700 64pt/1 Cousine,"Courier New",monospace;color:rgba(0,0,0,.07);transform:rotate(-35deg);text-transform:uppercase;white-space:nowrap}
 .rwprint .p:first-child{margin-top:0}
 .rwprint .p.scene{margin-top:24pt;text-transform:uppercase}
@@ -46,8 +55,10 @@ const HEADS = ['scene', 'act', 'page', 'panel'];
 /* what the page adds to the script's own words: the scene numbers and the (CONT'D) of a character who speaks
    again (the script's settings: sceneNumbers off/left/right/both, contd on unless switched off) */
 export function decorOf(script){
-  return { nums: sceneNumbers(script.els, fmtOf(script) === 'multicam'), contd: script.settings?.contd === false ? new Set() : contdOf(script.els) };
+  const locked = script.revision?.lock ? script.revision.locked : null;
+  return { nums: sceneNumbers(script.els, fmtOf(script) === 'multicam', locked), contd: script.settings?.contd === false ? new Set() : contdOf(script.els), dual: dualOf(script.els) };
 }
+const attrs = (e, d) => `${d.nums.has(e.id) ? ` data-n="${d.nums.get(e.id)}"` : ''}${d.dual.has(e.id) ? ` data-dual="${d.dual.get(e.id)}"` : ''}${e.rv ? ` data-rv="${e.rv}"` : ''}`;
 const said = (e, d) => shown(e) + (d?.contd.has(e.id) ? " (CONT'D)" : '');
 const SPOKEN = ['dialogue', 'paren', 'lyric'];
 
@@ -61,6 +72,8 @@ function units(els){
     if (e.t === 'character'){
       const u = [e];
       while (els[i + 1] && SPOKEN.includes(els[i + 1].t)) u.push(els[++i]);
+      // a dual dialogue: the second speaker goes with the first
+      if (els[i + 1]?.t === 'character' && els[i + 1].du){ u.push(els[++i]); while (els[i + 1] && SPOKEN.includes(els[i + 1].t)) u.push(els[++i]); }
       raw.push(u);
     } else if (e.t === 'video' && els[i + 1]?.t === 'audio') raw.push([e, els[++i]]);
     else raw.push([e]);
@@ -94,7 +107,7 @@ export function paginate(script, d = decorOf(script)){
   const limit = body.clientHeight;
   const pages = [[]];
   const deco = d;
-  const mk = (e) => { const d = document.createElement('div'); d.className = 'p ' + e.t; d.textContent = said(e, deco) || ' '; return d; };
+  const mk = (e) => { const d = document.createElement('div'); d.className = 'p ' + e.t; const k = deco.dual.get(e.id); if (k) d.dataset.dual = k; d.textContent = said(e, deco) || ' '; return d; };
   const fits = () => body.scrollHeight <= limit + 1;
   const breaks = breaksBefore(script);
   for (const u of units(script.els)){
@@ -118,7 +131,7 @@ export function paginate(script, d = decorOf(script)){
 }
 
 /* the pages to print; `only` (element ids) makes sides: those scenes alone, numbered as in the whole script */
-export function printHTML(script, { titlePage = script.settings?.titlePrint !== false, only = null } = {}){
+export function printHTML(script, { titlePage = script.settings?.titlePrint !== false, only = null, onlyRevised = false } = {}){
   const letter = script.settings?.page === 'letter';
   const deco = decorOf(script);
   const part = only ? { ...script, els: script.els.filter((e) => only.has(e.id)) } : script;
@@ -126,6 +139,12 @@ export function printHTML(script, { titlePage = script.settings?.titlePrint !== 
   const set = script.settings || {};
   const sn = ['left', 'right', 'both'].includes(set.sceneNumbers) ? set.sceneNumbers : 'off';
   const extra = `${set.header ? `<span class="hd">${esc(set.header)}</span>` : ''}${set.watermark ? `<div class="wm">${esc(set.watermark)}</div>` : ''}`;
+  // the revision: its name and date on the pages it changed, the pages in its colour if asked, or only those pages
+  const rev = script.revision || {};
+  const col = REVISIONS.find(([k]) => k === rev.color);
+  const touched = (els) => col && els.some((e) => e.rv === rev.color);
+  const tint = (els) => (rev.colorPages && touched(els) ? ` style="background:${col[2]}22"` : '');
+  const rvh = (els) => (touched(els) ? `<span class="rvh">${esc(col[1])} Rev. ${esc(rev.date || '')}</span>` : '');
   const tp = script.titlePage || {};
   // the title page as Final Draft lays it out: title and episode underlined, the credit and the author, and at
   // the foot on the left the copyright, the draft and the contact
@@ -133,7 +152,7 @@ export function printHTML(script, { titlePage = script.settings?.titlePrint !== 
   const title = titlePage && (tp.title || tp.author) ? `<section class="pg"><div class="tp">
     <h1>${esc(tp.title || script.title)}</h1>${tp.episode ? `<p class="ep">${esc(tp.episode)}</p>` : ''}<p class="by">${esc(tp.credit || 'Written by')}</p><p>${esc(tp.author)}</p></div>
     ${foot.length ? `<div class="tp-foot">${foot.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}</section>` : '';
-  const body = pages.map((els, i) => `<section class="pg">${extra}${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}"${deco.nums.has(e.id) ? ` data-n="${deco.nums.get(e.id)}"` : ''}>${esc(said(e, deco)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
+  const body = pages.map((els, i) => [els, i]).filter(([els]) => !onlyRevised || touched(els)).map(([els, i]) => `<section class="pg"${tint(els)}>${extra}${rvh(els)}${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}"${attrs(e, deco)}>${esc(said(e, deco)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(script.title || 'Script')}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cousine:ital,wght@0,400;0,700;1,400&display=swap">
 <style>${PRINT_CSS}${FORMAT_CSS}@page{size:${letter ? '8.5in 11in' : 'A4'};margin:0}</style></head>

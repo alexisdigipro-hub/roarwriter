@@ -88,3 +88,25 @@ export async function askAI(payload){
   if (!t) throw new Error('Sign in to use the AI.');
   return call('/functions/v1/roarwriter-ai', { method: 'POST', body: payload, token: t });
 }
+
+/* Versions (Oct 2026): named copies of a script kept in the account (roarwriter_versions), for everyone it is
+   shared with; before supabase/roarwriter.sql's Versions part is run the app keeps them on this device instead */
+export const listVersions = (id) => rest(`roarwriter_versions?script_id=eq.${q(id)}&select=id,name,meta,by_name,created_at&order=created_at.desc&limit=200`);
+export const getVersion = async (vid) => (await rest(`roarwriter_versions?id=eq.${q(vid)}&select=id,name,data,meta,by_name,created_at`))[0] || null;
+export const addVersion = async (row) => (await rest('roarwriter_versions?select=id,created_at', { method: 'POST', body: row, headers: { Prefer: 'return=representation' } }))?.[0] || null;
+export const deleteVersion = (vid) => rest(`roarwriter_versions?id=eq.${q(vid)}`, { method: 'DELETE' });
+
+/* Storyboard pictures (bucket roarwriter-boards, a folder per script): sent with the account's token and read
+   back the same way, so only the people the script is shared with see them */
+export async function putBoardImage(path, blob){
+  const res = await fetch(`${SB_URL}/storage/v1/object/roarwriter-boards/${path}`, { method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': blob.type || 'image/jpeg', 'x-upsert': 'true' }, body: blob });
+  if (!res.ok){ const e = new Error(`Error ${res.status}`); e.status = res.status; throw e; }
+}
+export async function getBoardImage(path){
+  const res = await fetch(`${SB_URL}/storage/v1/object/authenticated/roarwriter-boards/${path}`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${await token()}` } });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  return res.blob();
+}
+export async function removeBoardImage(path){
+  try { await fetch(`${SB_URL}/storage/v1/object/roarwriter-boards`, { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [path] }) }); } catch {}
+}
