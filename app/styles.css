@@ -122,6 +122,12 @@ html[data-desktop=win32] .top{padding-right:150px}
 .script p[data-t=transition],.ai-preview p[data-t=transition]{text-align:right;text-transform:uppercase}
 .script p[data-t=shot],.ai-preview p[data-t=shot]{text-transform:uppercase}
 .script::selection,.script *::selection{background:rgba(255,107,44,.28)}
+/* where a new page starts: a gap like the edge between two sheets, and the page's number (main.js markPages) */
+.script p[data-pg]{margin-top:calc(12pt + 1.5in)!important}
+.pb-layer{position:absolute;inset:0;pointer-events:none}
+.pb{position:absolute;left:0;right:0;height:0}
+.pb::before{content:'';position:absolute;left:-1px;right:-1px;top:calc(-.75in - 12pt - 14px);height:28px;background:var(--bg);box-shadow:inset 0 10px 14px -10px rgba(0,0,0,.45),inset 0 -10px 14px -10px rgba(0,0,0,.45)}
+.pb span{position:absolute;right:1in;top:calc(-.5in - 6pt);font:12pt var(--mono);color:#111}
 /* the title page, on the page (as the PDF prints it) */
 .desk{flex-direction:column;align-items:center;justify-content:flex-start;gap:28px}
 .tp-paper{display:flex;flex-direction:column;font:12pt/12pt var(--mono);color:#111;height:11.69in}
@@ -227,6 +233,9 @@ html[data-desktop=win32] .top{padding-right:150px}
   .paper,.paper.letter{width:auto;max-width:8.27in;min-height:calc(100dvh - 190px);margin:0 auto;padding:44px 8% 70px 11%;border-radius:10px}
   /* the letters follow the zoom (pinch on the page, or ⋯ > Zoom); the lines wrap again, the page never scrolls sideways */
   .desk > .paper + .paper{margin-top:16px}
+  .script p[data-pg]{margin-top:calc(1em + 90px)!important}
+  .pb::before{top:calc(-45px - .5em - 12px);height:24px}
+  .pb span{right:8%;top:calc(-30px - .5em);font-size:11px;color:#777}
   .tp-paper,.tp-paper.letter{height:auto;min-height:0;aspect-ratio:8.27/11.69;font-size:calc(12pt * var(--z,1))}
   .tp-mid{margin-top:22%}
   .script{min-height:50dvh;font-size:calc(12pt * var(--z,1));line-height:1}

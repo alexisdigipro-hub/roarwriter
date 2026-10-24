@@ -4,7 +4,7 @@ import { LABEL, TYPES, blankScript, charactersOf, isGreek, metaOf, normalize, pa
 import { Editor } from './editor.js';
 import { fountainToEls, parseFountain, toFountain } from './fountain.js';
 import { parseFdx, toFdx } from './fdx.js';
-import { exportPDF } from './print.js';
+import { exportPDF, paginate } from './print.js';
 import { CAT, CATS, breakdownCSV, breakdownOf, clearPaint, findIn, fold, normalizeTags, paintTags } from './breakdown.js';
 import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
 
@@ -274,7 +274,27 @@ async function viewScript(id){
     },
   });
   let paintT = 0;
-  function repaint(){ clearTimeout(paintT); paintT = setTimeout(() => editor && paintTags(editor.box, script.tags), 120); }
+  function repaint(){ clearTimeout(paintT); paintT = setTimeout(() => editor && paintTags(editor.box, script.tags), 120); markPages(); }
+  /* the pages, as the PDF lays them out (Alex, 24 Oct: "it does not show me the second page"): where a page
+     starts the page gets a gap like the edge between two sheets, with the page's number */
+  const breaks = h('div', { class: 'pb-layer', 'aria-hidden': 'true' });
+  paper.append(breaks);
+  let pageT = 0;
+  function markPages(){
+    clearTimeout(pageT);
+    pageT = setTimeout(() => {
+      if (!editor) return;
+      const pages = paginate(script);
+      const starts = new Map(pages.slice(1).map((pg, k) => [pg[0]?.id, k + 2]));
+      for (const p of editor.box.children){ const n = starts.get(p.dataset.id); if (n) p.dataset.pg = n; else delete p.dataset.pg; }
+      if (!paper.contains(breaks)) paper.append(breaks);
+      requestAnimationFrame(placeBreaks);
+    }, 400);
+  }
+  const placeBreaks = () => editor && breaks.replaceChildren(...[...editor.box.querySelectorAll('p[data-pg]')].map((p) => h('div', { class: 'pb', style: `top:${p.offsetTop}px` }, h('span', {}, `${p.dataset.pg}.`))));
+  // a wider or narrower window, or the zoom, moves the lines: the gaps follow
+  const sizeWatch = new ResizeObserver(() => requestAnimationFrame(placeBreaks));
+  sizeWatch.observe(paper);
   repaint();
   // right click on a word or a selection: tag it for the breakdown (on a phone, select it and press Tag)
   editor.box.addEventListener('contextmenu', (e) => {
@@ -302,7 +322,7 @@ async function viewScript(id){
     if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
-  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); zoom.off(); document.removeEventListener('selectionchange', onSel); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
+  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); zoom.off(); document.removeEventListener('selectionchange', onSel); sizeWatch.disconnect(); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
