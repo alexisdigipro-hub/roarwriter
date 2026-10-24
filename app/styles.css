@@ -178,6 +178,8 @@ html[data-desktop=win32] .top{padding-right:150px}
 @keyframes pop{from{transform:scale(.96);opacity:0}}
 .toast{position:fixed;left:50%;bottom:24px;z-index:99;transform:translate(-50%,20px);opacity:0;padding:10px 16px;border-radius:999px;background:rgba(40,44,52,.96);border:1px solid var(--edge);font-size:13.5px;transition:.25s var(--ease);pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:6px 6px 6px 16px}
+.toast-a{border:0;border-radius:999px;padding:6px 12px;background:var(--acc);color:#fff;font-weight:700;font-size:13px}
 
 /* breakdown: the tags lit on the page, each category its colour (breakdown.js paintTags) */
 ::highlight(rw-cast){background-color:#e5484d38;text-decoration:underline 2px #e5484d}

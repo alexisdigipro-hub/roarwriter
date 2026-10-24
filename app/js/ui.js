@@ -15,11 +15,13 @@ export function h(tag, attrs = {}, ...kids){
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 let toastT = 0;
-export function toast(msg){
+// a short message at the foot of the window; with { action, fn } it carries a button (e.g. Undo) and stays longer
+export function toast(msg, { action, fn } = {}){
   let t = document.getElementById('toast');
   if (!t){ t = h('div', { id: 'toast', class: 'toast', role: 'status' }); document.body.append(t); }
-  t.textContent = msg; t.classList.add('on');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
+  t.replaceChildren(msg, action ? h('button', { type: 'button', class: 'toast-a', onclick: () => { t.classList.remove('on'); fn(); } }, action) : '');
+  t.classList.toggle('act', !!action); t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), action ? 6000 : 2200);
 }
 
 // a window over the page; returns its close()
