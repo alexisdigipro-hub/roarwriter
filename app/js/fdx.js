@@ -3,8 +3,8 @@ import { blankScript, el, normalize, upper } from './model.js';
 /* Final Draft's .fdx (XML): read and written, so a script goes to and from Final Draft with its kinds of
    paragraph and its title page. */
 
-const TO_FDX = { scene: 'Scene Heading', action: 'Action', character: 'Character', paren: 'Parenthetical', dialogue: 'Dialogue', transition: 'Transition', shot: 'Shot' };
-const FROM_FDX = { 'scene heading': 'scene', action: 'action', character: 'character', parenthetical: 'paren', dialogue: 'dialogue', transition: 'transition', shot: 'shot', general: 'action', 'new act': 'scene', 'end of act': 'transition' };
+const TO_FDX = { scene: 'Scene Heading', action: 'Action', character: 'Character', paren: 'Parenthetical', dialogue: 'Dialogue', transition: 'Transition', shot: 'Shot', general: 'General' };
+const FROM_FDX = { 'scene heading': 'scene', action: 'action', character: 'character', parenthetical: 'paren', dialogue: 'dialogue', transition: 'transition', shot: 'shot', general: 'general', 'new act': 'scene', 'end of act': 'transition' };
 const xml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export function toFdx(script){

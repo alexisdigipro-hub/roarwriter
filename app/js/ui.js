@@ -60,6 +60,8 @@ export const I = {
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   back: svg('<path d="M15 18l-6-6 6-6"/>', 2.2),
   tag: svg('<path d="M3 12V4a1 1 0 011-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.6"/>'),
+  people: svg('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 010 6.8M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/>'),
+  leave: svg('<path d="M14 4h4a2 2 0 012 2v12a2 2 0 01-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>'),
   minus: svg('<path d="M5 12h14"/>', 2.4),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 2.4),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),

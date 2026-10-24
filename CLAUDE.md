@@ -8,7 +8,8 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
   Mac/Windows app (Electron, `electron/`) carries `app/` inside it and serves it as `app://rw/` (works offline).
 - **Accounts and data**: RoarMe's Supabase project (bzmjhbnwhdwmncxkqkdl), RoarMe accounts (as Roardino). Only the
   table `roarwriter_scripts` (supabase/roarwriter.sql, owner-only RLS) and the Edge Function `roarwriter-ai`; never
-  touch RoarMe's `roar_*` tables. Every database change goes in supabase/roarwriter.sql, safe to run again.
+  touch RoarMe's `roar_*` tables. Collaborate (24 Oct): roarwriter_shares (by email, edit/view), roarwriter_role(),
+  roarwriter_list(); store.js keeps a base copy per script and merges (model.js mergeScripts) before sending and when polling. Every database change goes in supabase/roarwriter.sql, safe to run again.
   `app/js/cloud.js` talks to Supabase with plain fetch (no library). Local first: `app/js/store.js` keeps every script
   in localStorage at once and sends it a second later; offline edits wait and are sent when back online.
 - **The script**: `{ title, titlePage, settings: { page: 'a4'|'letter' }, els: [{ id, t, x }] }`, t one of scene, action,

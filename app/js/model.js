@@ -10,11 +10,12 @@ export const TYPES = [
   ['dialogue', 'Dialogue', '5'],
   ['transition', 'Transition', '6'],
   ['shot', 'Shot', '7'],
+  ['general', 'Unformatted Text', '0'], // Final Draft's General: plain text, the whole width, no format
 ];
 export const LABEL = Object.fromEntries(TYPES.map(([k, l]) => [k, l]));
 
 // Enter at the end of an element: what comes next, as in Final Draft
-export const NEXT = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'character', transition: 'scene', shot: 'action' };
+export const NEXT = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'character', transition: 'scene', shot: 'action', general: 'general' };
 // Tab / Shift+Tab: the element turns into the next / previous kind
 const CYCLE = ['action', 'character', 'transition', 'scene', 'shot'];
 export function tabType(t, back = false){
@@ -90,8 +91,8 @@ export function placesOf(els){
 
 /* Pages by the industry rule of thumb (55 lines a page, Courier 12): how many lines each element takes at its
    width, with the blank line before it. Good for the count in the bar; the PDF lays the pages out for real. */
-const WIDTH = { scene: 61, action: 61, character: 38, paren: 25, dialogue: 35, transition: 61, shot: 61 };
-const GAP = { scene: 2, action: 1, character: 1, paren: 0, dialogue: 0, transition: 1, shot: 1 };
+const WIDTH = { scene: 61, action: 61, character: 38, paren: 25, dialogue: 35, transition: 61, shot: 61, general: 61 };
+const GAP = { scene: 2, action: 1, character: 1, paren: 0, dialogue: 0, transition: 1, shot: 1, general: 1 };
 export function pageCount(els){
   let lines = 0;
   els.forEach((e, i) => {
@@ -103,3 +104,29 @@ export function pageCount(els){
 }
 
 export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length });
+
+/* Two people on one script (Collaborate): what each changed since the copy both started from (base) is kept.
+   The other side's script is taken as it is, then this side's own changes are put on it: lines it edited or
+   added (after the line they follow), lines it deleted that the other side left alone, the title page's fields
+   and the settings it changed, and the tags it added or removed. */
+export function mergeScripts(base, mine, theirs){
+  base = normalize(base); mine = normalize(mine); theirs = normalize(theirs);
+  const B = new Map(base.els.map((e) => [e.id, e])), M = new Map(mine.els.map((e) => [e.id, e]));
+  const same = (a, b) => a && b && a.t === b.t && a.x === b.x;
+  let els = theirs.els.filter((e) => {
+    if (M.has(e.id)) return true;
+    return !(B.has(e.id) && same(B.get(e.id), e)); // deleted here, untouched there: gone
+  }).map((e) => { const m = M.get(e.id); return m && !same(m, B.get(e.id)) ? { ...m } : e; });
+  mine.els.forEach((e, i) => {
+    if (B.has(e.id) || els.some((x) => x.id === e.id)) return;
+    let at = -1;
+    for (let k = i - 1; k >= 0 && at < 0; k--) at = els.findIndex((x) => x.id === mine.els[k].id);
+    els.splice(at + 1, 0, { ...e });
+  });
+  if (!els.length) els = theirs.els;
+  const fields = (b, m, t) => Object.fromEntries([...new Set([...Object.keys(t), ...Object.keys(m)])].map((k) => [k, m[k] !== b[k] ? m[k] : t[k]]));
+  const tag = (t) => t.cat + '|' + String(t.name).toLowerCase();
+  const bt = new Set((base.tags || []).map(tag)), mt = new Set((mine.tags || []).map(tag));
+  const tags = [...(theirs.tags || []).filter((t) => mt.has(tag(t)) || !bt.has(tag(t))), ...(mine.tags || []).filter((t) => !bt.has(tag(t)) && !(theirs.tags || []).some((x) => tag(x) === tag(t)))];
+  return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags };
+}

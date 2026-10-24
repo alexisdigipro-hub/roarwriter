@@ -57,7 +57,7 @@ const send = (cmd) => win?.webContents.send('rw:menu', cmd)
 function menu() {
   const mac = process.platform === 'darwin'
   const cmd = mac ? 'Cmd' : 'Ctrl'
-  const types = [['Scene Heading', 'scene', 1], ['Action', 'action', 2], ['Character', 'character', 3], ['Parenthetical', 'paren', 4], ['Dialogue', 'dialogue', 5], ['Transition', 'transition', 6], ['Shot', 'shot', 7]]
+  const types = [['Scene Heading', 'scene', 1], ['Action', 'action', 2], ['Character', 'character', 3], ['Parenthetical', 'paren', 4], ['Dialogue', 'dialogue', 5], ['Transition', 'transition', 6], ['Shot', 'shot', 7], ['Unformatted Text', 'general', 0]]
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(mac ? [{ role: 'appMenu' }] : []),
     { label: 'File', submenu: [
@@ -71,7 +71,14 @@ function menu() {
     { role: 'editMenu' },
     { label: 'Format', submenu: types.map(([label, t, n]) => ({ label, accelerator: `${cmd}+${n}`, click: () => send('type:' + t) })) },
     { label: 'AI', submenu: [{ label: 'Show AI', accelerator: `${cmd}+Shift+A`, click: () => send('ai') }] },
-    { role: 'viewMenu' },
+    // the zoom is the page's, as in Final Draft (the whole window does not grow)
+    { label: 'View', submenu: [
+      { label: 'Zoom In', accelerator: `${cmd}+=`, click: () => send('zoom-in') },
+      { label: 'Zoom Out', accelerator: `${cmd}+-`, click: () => send('zoom-out') },
+      { label: 'Actual Size', accelerator: `${cmd}+Shift+0`, click: () => send('zoom-reset') },
+      { type: 'separator' },
+      { role: 'togglefullscreen' },
+    ] },
     { role: 'windowMenu' },
   ]))
 }
