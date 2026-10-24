@@ -267,6 +267,9 @@ export function cardsView(ctx){
         h('div', { class: 'card-h' }, h('span', { class: 'sn' }, String(k + 1)), h('button', { type: 'button', class: 'card-t', title: 'Go to this scene', onclick: () => ctx.goTo(s.id, true) }, s.text), h('small', {}, len)),
         syn,
         preview ? h('p', { class: 'card-p' }, preview.length > 160 ? preview.slice(0, 160) + '…' : preview) : null,
+        // who writes this scene (a script shared with other writers)
+        ctx.writers?.().length > 1 ? h('select', { class: 'input card-w', disabled: ctx.readOnly(), onchange: (e) => { if (e.target.value) script.assign[s.id] = e.target.value; else delete script.assign[s.id]; ctx.save(); } },
+          h('option', { value: '' }, 'Writer: anyone'), ...ctx.writers().map((w) => h('option', { value: w, selected: script.assign?.[s.id] === w }, w))) : null,
         h('div', { class: 'card-f' },
           h('div', { class: 'card-colors' }, ...COLORS.map((col) => h('button', { type: 'button', class: 'cdot' + ((c.color || '') === col ? ' on' : ''), style: col ? `background:${col}` : '', title: col ? 'Colour' : 'No colour', onclick: () => { script.cards[s.id] = { ...(script.cards[s.id] || {}), color: col }; ctx.save(); draw(); } }))),
           h('button', { class: 'ib', type: 'button', title: 'Earlier', 'aria-label': 'Earlier', html: I.left, onclick: () => move(k, k - 1) }),

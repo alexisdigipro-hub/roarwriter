@@ -14,6 +14,8 @@ import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
 import { VERSION } from './version.js';
 import { boardView } from './board.js';
 import { dictation } from './dictate.js';
+import { beatsView, openSchedule, presence } from './plan.js';
+import { bibleSide, blankSeries, isSeries, viewSeries } from './series.js';
 import { autoVersion, openAlternates, openVersions, paceSection, researchPane, scriptPane } from './studio.js';
 
 /* RoarWriter (The Mad Lions Lab, Oct 2026): write screenplays in the industry format, in English or Greek, on a
@@ -98,12 +100,13 @@ let libSearch = '', libWho = 'all', libSort = 'recent';
 const FMT_DOT = { film: '#ff6b2c', tv: '#4a90e2', multicam: '#f2c230', stage: '#c77dff', musical: '#f48fb1', audio: '#5cb85c', av: '#38bdf8', comic: '#fa8072' };
 // the first lines of a script, as its page begins (the title page when there is nothing written yet)
 function peekOf(s, big = false){
+  if (s.meta?.kind === 'series') return h('div', { class: 'pk pk-tp pk-series' }, h('small', {}, 'SERIES'), h('b', {}, upper(s.title || 'Untitled')), h('span', {}, `${s.meta.episodes || 0} episodes`));
   const lines = (s.meta?.peek || []).slice(0, big ? 12 : 8);
   if (!lines.length) return h('div', { class: 'pk pk-tp' }, h('b', {}, upper(s.title || 'Untitled')), h('span', {}, s.meta?.author ? `by ${s.meta.author}` : ''));
   return h('div', { class: 'pk' }, ...lines.map(([t, x]) => h('p', { 'data-t': t }, ['scene', 'character', 'transition', 'shot', 'act', 'endact', 'page', 'panel'].includes(t) ? upper(x) : x)));
 }
 const pagesOf = (s) => `${s.meta?.pages || 1} ${s.meta?.pages === 1 ? 'page' : 'pages'}`;
-const fmtChip = (s) => { const k = s.meta?.format || 'film'; return h('span', { class: 'chip dot', style: `--d:${FMT_DOT[k] || FMT_DOT.film}` }, FORMATS[k]?.label || 'Feature Film'); };
+const fmtChip = (s) => { if (s.meta?.kind === 'series') return h('span', { class: 'chip dot', style: '--d:#4a90e2' }, `Series · ${s.meta.episodes || 0} episodes`); const k = s.meta?.format || 'film'; return h('span', { class: 'chip dot', style: `--d:${FMT_DOT[k] || FMT_DOT.film}` }, FORMATS[k]?.label || 'Feature Film'); };
 async function viewLibrary(){
   document.title = 'RoarWriter';
   const user = currentUser();
@@ -159,6 +162,7 @@ async function viewLibrary(){
       h('span', { class: 'fmt-mini', 'data-fmt': k, 'aria-hidden': 'true' }, ...miniOf(k)),
       h('span', { class: 'start-t' }, h('b', {}, FORMATS[k].label), h('small', {}, k === 'film' ? 'Feature or short' : k === 'tv' ? 'An episode, in acts' : 'Theatre, acts and scenes')))),
     h('div', { class: 'start-row' },
+      h('button', { type: 'button', class: 'btn', onclick: async () => { const sid = crypto.randomUUID(); store.save(sid, normalize(blankSeries(''))); await store.flush(); location.hash = '#s/' + sid; } }, h('span', { html: I.board }), 'A series'),
       h('button', { type: 'button', class: 'btn', onclick: () => pickFormat() }, h('span', { html: I.cards }), 'Every format'),
       h('button', { type: 'button', class: 'btn', onclick: importScript }, h('span', { html: I.import }), 'Import a file')),
     h('small', { class: 'muted' }, 'Final Draft (.fdx), Fade In (.fadein) and Fountain come in as they are.'));
@@ -166,6 +170,7 @@ async function viewLibrary(){
     h('div', { class: 'tile-page' }, peekOf(s)),
     h('div', { class: 'tile-body' },
       h('div', { class: 'tile-title' }, s.title || 'Untitled'),
+      s.meta?.series ? h('div', { class: 'tile-meta' }, h('span', { class: 'chip quiet' }, s.meta.episode || 'Episode')) : null,
       h('div', { class: 'tile-meta' }, h('i', { class: 'fdot', style: `--d:${FMT_DOT[s.meta?.format || 'film'] || FMT_DOT.film}`, title: FORMATS[s.meta?.format || 'film']?.label || '' }), `${pagesOf(s)} · ${ago(s.updated_at)}`),
       sharedChip(s)),
     acts(s));
@@ -215,7 +220,7 @@ function miniOf(k){
   return [k === 'film' ? null : L('act', 30), L('scene', 60), L('action', 90), L('character', 20), L('dialogue', 50), k === 'multicam' ? L('dialogue', 45) : L('action', 75), L('character', 20), L('dialogue', 45)].filter(Boolean);
 }
 
-async function newScript(data, open = true, format = 'film'){
+async function newScript(data, open = true, format = 'film', patch = null){
   const id = crypto.randomUUID();
   const s = normalize(data || blankScript('Untitled'));
   if (!data){
@@ -225,6 +230,7 @@ async function newScript(data, open = true, format = 'film'){
     s.settings.format = format;
     s.els = startOf(format).map(([t, x]) => ({ id: crypto.randomUUID().slice(0, 8), t, x }));
   }
+  patch?.(s);
   store.save(id, s);
   await store.flush();
   if (open) location.hash = '#s/' + id;
@@ -253,6 +259,9 @@ async function viewScript(id){
   app.replaceChildren(h('p', { class: 'center muted' }, 'Opening…'));
   const script = await store.open(id);
   if (!script){ toast('This script is not here.'); location.hash = ''; return; }
+  // a series: its bible and its episodes (series.js)
+  if (isSeries(script)) return viewSeries({ app, store, id, data: script, open: (x) => { location.hash = '#s/' + x; },
+    newEpisode: (sid, n, name) => newScript(null, false, 'tv', (s) => { s.settings.series = sid; s.titlePage.title = name || ''; s.titlePage.episode = `Episode ${n}`; s.title = `${name || 'Untitled'} · Ep ${n}`; }) });
   document.title = (script.title || 'Untitled') + ' · RoarWriter';
   script.tags = normalizeTags(script.tags);
   // older scripts kept the word Untitled as their title: it goes, so the title page shows TITLE to type over
@@ -278,6 +287,9 @@ async function viewScript(id){
   const scenesBtn = h('button', { class: 'btn narrow-only', type: 'button', title: 'Scenes and characters', 'aria-label': 'Scenes and characters', onclick: () => openSide() }, h('span', { html: I.scenes }));
   const moreBtn = h('button', { class: 'btn phone-only', type: 'button', title: 'More', 'aria-label': 'More', onclick: () => moreMenu() }, h('span', { html: I.more }));
   const roChip = h('span', { class: 'chip ro', hidden: true }, 'View only');
+  // Collaborate: who else is in the script now (their initial; on hover, where they are)
+  const herePill = h('div', { class: 'presence' });
+  let people = [];
   // Revision mode on: its colour in the bar, a click opens its settings
   const revChip = h('button', { type: 'button', class: 'chip rev wide-only', hidden: true, onclick: () => openSettings(ctx, 'revisions') });
   const showRev = () => { const r = script.revision || {}, c = REVISIONS.find(([k]) => k === r.color); revChip.hidden = !(r.on && c); if (c) { revChip.style.setProperty('--rv', c[2]); revChip.textContent = `${c[1]} Rev.`; } };
@@ -288,12 +300,12 @@ async function viewScript(id){
      Page or Cards), on the right the tools as round icons with their names on hover (find, read aloud,
      breakdown, share, export, AI, settings) */
   const iconBtn = (icon, label, fn, cls = 'wide-only') => h('button', { class: 'btn icon ' + cls, type: 'button', title: label, 'aria-label': label, onclick: fn }, h('span', { html: icon }));
-  const VIEWS = [['page', 'Page'], ['cards', 'Cards'], ['board', 'Board']];
+  const VIEWS = [['page', 'Page'], ['cards', 'Cards'], ['beats', 'Beats'], ['board', 'Board']];
   const viewSeg = h('div', { class: 'seg view-seg wide-only' }, ...VIEWS.map(([k, l]) => h('button', { type: 'button', 'data-v': k, class: k === 'page' ? 'on' : '', onclick: () => setView(k) }, l)));
   const bar = h('header', { class: 'top edit-top' },
     h('a', { class: 'ib', href: '#', title: 'All scripts', 'aria-label': 'All scripts', html: I.back }),
     h('div', { class: 'title-box' }, titleIn, h('div', { class: 'title-sub' }, pagesSub, ' · ', saveSub)), roChip,
-    typeBtn, fmtPill, revChip, pages, viewSeg, h('div', { class: 'spacer' }), saveState,
+    typeBtn, fmtPill, revChip, pages, viewSeg, h('div', { class: 'spacer' }), herePill, saveState,
     iconBtn(I.find, 'Find & replace', () => openFind()),
     iconBtn(I.speak, 'Read aloud', () => readAloud()),
     iconBtn(I.clock, 'Versions', () => openVersions(ctx)),
@@ -305,7 +317,7 @@ async function viewScript(id){
   // the side: scenes and characters
   let side = 'scenes';
   const sideList = h('div', { class: 'side-list' });
-  const sideSeg = h('div', { class: 'seg' }, ...[['scenes', 'Scenes'], ['chars', 'Characters'], ['notes', 'Notes']].map(([k, l]) => h('button', { type: 'button', class: k === side ? 'on' : '', onclick: (e) => { side = k; [...sideSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); drawSide(); } }, l)));
+  const sideSeg = h('div', { class: 'seg' }, ...[['scenes', 'Scenes'], ['chars', 'Characters'], ['notes', 'Notes'], ...(script.settings.series ? [['series', 'Series']] : [])].map(([k, l]) => h('button', { type: 'button', class: k === side ? 'on' : '', onclick: (e) => { side = k; [...sideSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); drawSide(); } }, l)));
   const sideClose = h('button', { class: 'ib side-close', type: 'button', title: 'Close', 'aria-label': 'Close', html: I.x, onclick: () => closeSide() });
   const sidePanel = h('aside', { class: 'side' }, h('div', { class: 'side-head' }, sideSeg, sideClose), sideList);
   // on a narrow screen the side opens over the page; a tap on a scene or a character closes it and goes there
@@ -317,12 +329,18 @@ async function viewScript(id){
     if (side === 'scenes'){
       const sc = scenesOf(script.els);
       const at = (() => { const i = script.els.findIndex((e) => e.id === caretId); let n = -1; sc.forEach((s, k) => { if (s.i <= i) n = k; }); return n; })();
-      sideList.replaceChildren(...(sc.length ? sc.map((s, k) => h('button', { type: 'button', class: 'srow' + (k === at ? ' on' : ''), onclick: () => goTo(s.id) }, h('span', { class: 'sn' }, String(s.n)), h('span', { class: 'st' }, s.text))) : [h('p', { class: 'muted small' }, 'Scenes appear here as you write scene headings (INT. / EXT. / ΕΣΩΤ. / ΕΞΩΤ.).')]));
+      // who is in each scene now, and who writes it (Cards > Writer)
+      const inScene = new Map(); for (const p of people){ const x = sceneOfEl(p.el_id); if (x) inScene.set(x.id, [...(inScene.get(x.id) || []), p]); }
+      sideList.replaceChildren(...(sc.length ? sc.map((s, k) => h('button', { type: 'button', class: 'srow' + (k === at ? ' on' : ''), onclick: () => goTo(s.id) }, h('span', { class: 'sn' }, String(s.n)), h('span', { class: 'st' }, s.text),
+        script.assign[s.id] ? h('span', { class: 'pr-as', title: `Written by ${script.assign[s.id]}` }, script.assign[s.id][0].toUpperCase()) : null,
+        ...(inScene.get(s.id) || []).map((p) => h('span', { class: 'pr-av sm', title: `${p.name || p.email} is here` }, initial(p))))) : [h('p', { class: 'muted small' }, 'Scenes appear here as you write scene headings (INT. / EXT. / ΕΣΩΤ. / ΕΞΩΤ.).')]));
     } else if (side === 'chars'){
       const cs = charactersOf(script.els);
       sideList.replaceChildren(...(cs.length ? cs.map((c) => h('div', { class: 'crow-w' },
         h('button', { type: 'button', class: 'crow', onclick: () => goTo(script.els[c.first].id) }, h('span', { class: 'cn' }, c.name), h('span', { class: 'cc' }, `${c.lines} lines · ${c.scenes} sc.`)),
         h('button', { class: 'ib crow-ed', type: 'button', title: 'Rename', 'aria-label': 'Rename ' + c.name, html: I.edit, onclick: () => renameCharacter(c.name) }))) : [h('p', { class: 'muted small' }, 'Characters appear here once they speak.')]));
+    } else if (side === 'series'){
+      bibleSide(store, script.settings.series, id).then((kids) => { if (side === 'series') sideList.replaceChildren(...kids.filter(Boolean)); });
     } else {
       sideList.replaceChildren(
         h('button', { class: 'btn side-add', type: 'button', onclick: () => addNote(ctx, caretId) }, '+ Note on this line'),
@@ -418,6 +436,8 @@ async function viewScript(id){
     replaceScript: (data) => { const d = normalize(data); for (const k of Object.keys(d)){ if (k === 'titlePage' || k === 'settings'){ Object.keys(script[k]).forEach((x) => delete script[k][x]); Object.assign(script[k], d[k]); } else script[k] = d[k]; } editor.setEls(script.els); editor.commit(true); titleIn.value = script.title || ''; tpPaper.querySelectorAll('.tpf').forEach((f) => { f.textContent = script.titlePage[f.dataset.k] || ''; }); paper.dataset.fmt = fmtOf(script); drawKinds(); showRev(); showPages(); drawSide(); repaint(); save(); },
     newCopy: async (data) => { await store.flush(); await newScript(data); },
     showReport: () => { bdView = 'report'; showBreakdown(); },
+    // the people a scene can be given to (Cards > Writer): whoever the script is shared with to edit, and its owner
+    writers: () => writers,
     goTo: (id, page) => goTo(id, page),
     redecorate: () => { paper.dataset.sn = script.settings.sceneNumbers || 'off'; paper.dataset.names = script.settings.names || 'fd'; markPages(); here(); },
     setFormat: (k) => setFormat(k), setPage: (k) => setPage(k), titlePage: () => titlePage(),
@@ -433,9 +453,9 @@ async function viewScript(id){
   const cards = cardsView(ctx);
   mid.append(cards.el); cards.el.hidden = true;
   // the storyboard, and the page's other views (beats.js adds the beat board)
-  const board = boardView(ctx);
-  mid.append(board.el); board.el.hidden = true;
-  const others = { cards, board };
+  const board = boardView(ctx), beats = beatsView(ctx);
+  mid.append(board.el, beats.el); board.el.hidden = true; beats.el.hidden = true;
+  const others = { cards, board, beats };
   const speech = dictation(ctx);
   const voice = reader(ctx);
   let view = 'page';
@@ -443,6 +463,7 @@ async function viewScript(id){
     view = k;
     [...viewSeg.children].forEach((b) => b.classList.toggle('on', b.dataset.v === k));
     desk.hidden = k !== 'page';
+    if (k === 'page') drawSide();
     for (const [n, v] of Object.entries(others)){ v.el.hidden = n !== k; if (n === k) v.draw(); }
   }
   // Find works on the page: from the cards, it goes back to it
@@ -607,6 +628,15 @@ async function viewScript(id){
   }
   drawSide();
   // the caret where writing goes on: a new script's first empty line (its format's start), else the end
+  const sceneOfEl = (eid) => { const i = script.els.findIndex((e) => e.id === eid); let n = null; scenesOf(script.els).forEach((s) => { if (s.i <= i) n = s; }); return n; };
+  const initial = (p) => (p.name || p.email || '?').trim()[0].toUpperCase();
+  const offPresence = presence(ctx, (list) => {
+    people = list;
+    herePill.replaceChildren(...list.slice(0, 5).map((p) => { const s = sceneOfEl(p.el_id); return h('button', { type: 'button', class: 'pr-av', title: `${p.name || p.email}${s ? ` · scene ${s.n}` : ''}`, onclick: () => { if (s) goTo(s.id, true); } }, initial(p)); }));
+    if (side === 'scenes') drawSide();
+  });
+  let writers = [];
+  listShares(id).then((l) => { writers = [...new Set([currentUser()?.email?.toLowerCase(), ...l.filter((x) => x.role === 'edit').map((x) => x.email)].filter(Boolean))]; }).catch(() => {});
   // once a day, a version of its own (Versions)
   setTimeout(() => { if (editor) autoVersion(ctx); }, 8000);
   const first = script.els.find((e) => !e.x.trim()) || script.els[script.els.length - 1];
@@ -630,7 +660,7 @@ async function viewScript(id){
     else if (cmd === 'zoom-in') zoom.by(0.1); else if (cmd === 'zoom-out') zoom.by(-0.1); else if (cmd === 'zoom-reset') zoom.reset();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
-  leaveEditor = async () => { speech.close(); document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); offWatch(); offPref(); voice.stop(); finder.close(); zoom.off(); document.removeEventListener('selectionchange', onSel); sizeWatch.disconnect(); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
+  leaveEditor = async () => { offPresence(); speech.close(); document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); offWatch(); offPref(); voice.stop(); finder.close(); zoom.off(); document.removeEventListener('selectionchange', onSel); sizeWatch.disconnect(); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
@@ -705,7 +735,7 @@ async function viewScript(id){
             return chip(c, e.name, [h('i', {}, `sc. ${e.scenes.filter(Boolean).join(', ') || '-'}`), t ? h('button', { type: 'button', title: 'Remove the tag', 'aria-label': 'Remove the tag', onclick: () => { script.tags = script.tags.filter((x) => x.id !== t.id); save(); repaint(); draw(); } }, '×') : null]);
           }))))));
       }
-      body.replaceChildren(h('div', { class: 'bd-top' }, seg, h('span', { class: 'spacer' }), csv), list, bdView === 'report' ? '' : hint);
+      body.replaceChildren(h('div', { class: 'bd-top' }, seg, h('span', { class: 'spacer' }), h('button', { class: 'btn', type: 'button', onclick: () => { close(); openSchedule(ctx); } }, h('span', { html: I.board }), 'Schedule'), csv), list, bdView === 'report' ? '' : hint);
     };
     draw();
     const close = modal('Breakdown', body, { wide: true });
@@ -721,6 +751,7 @@ async function viewScript(id){
         h('button', { class: 'ib', type: 'button', 'aria-label': 'Bigger', html: I.plus, onmousedown: step(0.1) })),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); share(); } }, h('span', {}, 'Share'), h('kbd', {}, 'write it together')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); showBreakdown(); } }, h('span', {}, 'Breakdown'), h('kbd', {}, 'cast, locations, props')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); openSchedule(ctx); } }, h('span', {}, 'Shooting schedule'), h('kbd', {}, 'stripboard, day out of days')),
       ...VIEWS.filter(([k]) => k !== view).map(([k, l]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); setView(k); } }, h('span', {}, k === 'page' ? 'Back to the page' : l), h('kbd', {}, { page: 'write', cards: 'the scenes as cards', board: 'storyboard, shot list', beats: 'the story’s beats' }[k]))),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); speech.start(); } }, h('span', {}, 'Dictate'), h('kbd', {}, 'write by speaking')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); openFind(true); } }, h('span', {}, 'Find & replace'), h('kbd', {}, '')),

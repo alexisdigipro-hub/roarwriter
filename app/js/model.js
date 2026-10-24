@@ -148,6 +148,7 @@ export function pageCount(els){
 
 // what the list of scripts shows: the numbers, and the first lines (peek), drawn small as the page begins
 export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length, format: s.settings?.format || 'film',
+  ...(s.kind === 'series' ? { kind: 'series', episodes: s.series?.episodes?.length || 0 } : {}), ...(s.settings?.series ? { series: s.settings.series, episode: s.titlePage.episode || '' } : {}),
   words: s.els.reduce((a, e) => a + (e.x.trim() ? e.x.trim().split(/\s+/).length : 0), 0),
   peek: s.els.filter((e) => e.x.trim()).slice(0, 12).map((e) => [e.t, e.x.split('\n')[0].slice(0, 80)]) });
 
@@ -188,7 +189,7 @@ export function mergeScripts(base, mine, theirs){
   const keyed = (k) => { const b = base[k] || {}, m = mine[k] || {}, t = theirs[k] || {}, J = JSON.stringify;
     return Object.fromEntries([...new Set([...Object.keys(t), ...Object.keys(m), ...Object.keys(b)])].map((x) => [x, J(m[x]) !== J(b[x]) ? m[x] : t[x]]).filter(([, v]) => v !== undefined)); };
   return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags, notes, cards,
-    boards: keyed('boards'), alts: keyed('alts'), timing: keyed('timing'), revision: keyed('revision'), reports: keyed('reports'), beats: keyed('beats'), schedule: keyed('schedule'), assign: keyed('assign'), pacing: JSON.stringify(mine.pacing) !== JSON.stringify(base.pacing) ? mine.pacing : theirs.pacing };
+    boards: keyed('boards'), alts: keyed('alts'), timing: keyed('timing'), revision: keyed('revision'), reports: keyed('reports'), ...(theirs.kind || mine.kind ? { kind: theirs.kind || mine.kind, series: JSON.stringify(mine.series) !== JSON.stringify(base.series) ? mine.series : theirs.series } : {}), beats: keyed('beats'), schedule: keyed('schedule'), assign: keyed('assign'), pacing: JSON.stringify(mine.pacing) !== JSON.stringify(base.pacing) ? mine.pacing : theirs.pacing };
 }
 
 /* Scene numbers: 1, 2, 3 (a sitcom letters them, A, B, C); a comic's pages and a play's scenes count too */
