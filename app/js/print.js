@@ -9,7 +9,7 @@ export const PRINT_CSS = `
 .rwprint{--pw:8.27in;--ph:11.69in}
 .rwprint.letter{--pw:8.5in;--ph:11in}
 .rwprint .pg{position:relative;box-sizing:border-box;width:var(--pw);height:var(--ph);padding:1in 1in 1in 1.5in;background:#fff;color:#000;
-  font:12pt/12pt "Courier Prime","Courier New",Courier,monospace;overflow:hidden;page-break-after:always;break-after:page}
+  font:12pt/12pt Cousine,"Courier New",Courier,monospace;overflow:hidden;page-break-after:always;break-after:page}
 .rwprint .pg:last-child{page-break-after:auto;break-after:auto}
 .rwprint .pn{position:absolute;top:.5in;right:1in;font:inherit}
 .rwprint .body{height:100%}
@@ -104,7 +104,7 @@ export function printHTML(script, { titlePage = true } = {}){
     ${foot.length ? `<div class="tp-foot">${foot.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}</section>` : '';
   const body = pages.map((els, i) => `<section class="pg">${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}">${esc(shown(e)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(script.title || 'Script')}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cousine:ital,wght@0,400;0,700;1,400&display=swap">
 <style>${PRINT_CSS}@page{size:${letter ? '8.5in 11in' : 'A4'};margin:0}</style></head>
 <body class="rwprint${letter ? ' letter' : ''}" style="margin:0">${title}${body}</body></html>`;
 }

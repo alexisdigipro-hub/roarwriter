@@ -4,6 +4,7 @@ import { LABEL, TYPES, blankScript, charactersOf, isGreek, metaOf, normalize, pa
 import { Editor } from './editor.js';
 import { fountainToEls, parseFountain, toFountain } from './fountain.js';
 import { parseFdx, toFdx } from './fdx.js';
+import { parseFadein, toFadein } from './fadein.js';
 import { exportPDF, paginate } from './print.js';
 import { CAT, CATS, breakdownCSV, breakdownOf, clearPaint, findIn, fold, normalizeTags, paintTags } from './breakdown.js';
 import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
@@ -101,7 +102,7 @@ async function viewLibrary(){
     const w = libSearch.trim().toLowerCase();
     const shown = list.filter((s) => !w || [s.title, s.meta?.author].join(' ').toLowerCase().includes(w));
     if (!list.length){
-      grid.replaceChildren(h('div', { class: 'empty' }, h('b', {}, 'Your first script'), h('span', {}, 'Start a new one, or bring one in from Final Draft (.fdx) or Fountain.'),
+      grid.replaceChildren(h('div', { class: 'empty' }, h('b', {}, 'Your first script'), h('span', {}, 'Start a new one, or bring one in from Final Draft (.fdx), Fade In (.fadein) or Fountain.'),
         h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => newScript() }, 'New script'), h('button', { class: 'btn', onclick: importScript }, 'Import'))));
       return;
     }
@@ -150,14 +151,17 @@ async function newScript(data, open = true){
 }
 
 async function readScriptFile(file){
+  // Fade In: a zip (or its bare OSF xml)
+  if (/\.fadein$/i.test(file.name)) return parseFadein(await file.arrayBuffer());
   const text = await file.text();
+  if (/\.xml$/i.test(file.name) && /Open Screenplay Format/i.test(text.slice(0, 600))) return parseFadein(new TextEncoder().encode(text).buffer);
   if (/\.fdx$/i.test(file.name) || /<FinalDraft/i.test(text.slice(0, 400))) return parseFdx(text);
   const s = parseFountain(text);
   if (!s.title) s.title = s.titlePage.title = file.name.replace(/\.[^.]+$/, '');
   return s;
 }
 async function importScript(){
-  const file = await pickFile('.fdx,.fountain,.spmd,.txt,text/plain');
+  const file = await pickFile('.fdx,.fadein,.fountain,.spmd,.txt,.xml,text/plain');
   if (!file) return;
   try { const s = await readScriptFile(file); await newScript(s); toast(`Imported ${file.name}`); }
   catch (e) { toast(e.message || 'This file could not be read.'); }
@@ -406,7 +410,7 @@ async function viewScript(id){
   };
   document.addEventListener('keydown', keys);
   const offMenu = window.rwDesktop?.onMenu?.((cmd) => {
-    if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
+    if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'fadein') saveAs('fadein'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
     else if (cmd === 'zoom-in') zoom.by(0.1); else if (cmd === 'zoom-out') zoom.by(-0.1); else if (cmd === 'zoom-reset') zoom.reset();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
@@ -423,6 +427,7 @@ async function viewScript(id){
     const menu = h('div', { class: 'menu', style: `left:${Math.max(8, r.right - 240)}px;top:${r.bottom + 6}px` },
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'PDF'), h('kbd', {}, 'to send or print')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fdx'); } }, h('span', {}, 'Final Draft'), h('kbd', {}, '.fdx')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fadein'); } }, h('span', {}, 'Fade In'), h('kbd', {}, '.fadein')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fountain'); } }, h('span', {}, 'Fountain'), h('kbd', {}, '.fountain')));
     showMenu(menu);
   }
@@ -498,14 +503,21 @@ async function viewScript(id){
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); titlePage(); } }, h('span', {}, 'Title page'), h('kbd', {}, 'title, author, page size')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'Export PDF'), h('kbd', {}, 'to send or print')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fdx'); } }, h('span', {}, 'Save as Final Draft'), h('kbd', {}, '.fdx')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fadein'); } }, h('span', {}, 'Save as Fade In'), h('kbd', {}, '.fadein')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fountain'); } }, h('span', {}, 'Save as Fountain'), h('kbd', {}, '.fountain')));
     showMenu(menu);
   }
   async function pdf(){ try { await exportPDF(script); } catch (e) { toast(e.message || 'The PDF could not be made.'); } }
   async function saveAs(kind){
     const base = (script.title || 'Untitled').replace(/[\\/:*?"<>|]+/g, ' ').trim();
-    const text = kind === 'fdx' ? toFdx(script) : toFountain(script);
     const name = `${base}.${kind}`;
+    if (kind === 'fadein'){
+      const bytes = toFadein(script);
+      if (window.rwDesktop?.saveBytes){ const ok = await window.rwDesktop.saveBytes(name, bytes); if (ok) toast('Saved'); }
+      else download(name, bytes, 'application/zip');
+      return;
+    }
+    const text = kind === 'fdx' ? toFdx(script) : toFountain(script);
     if (window.rwDesktop?.saveText){ const ok = await window.rwDesktop.saveText(name, text); if (ok) toast('Saved'); }
     else download(name, text, kind === 'fdx' ? 'application/xml' : 'text/plain');
   }

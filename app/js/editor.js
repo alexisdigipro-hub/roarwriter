@@ -54,16 +54,45 @@ export class Editor {
   textOf(p){ return (p.innerText || '').replace(/ /g, ' ').replace(/\n$/, ''); }
   read(){ return [...this.box.children].map((p) => ({ id: p.dataset.id || uid(), t: p.dataset.t || 'action', x: this.textOf(p) })); }
   // what a browser leaves behind after typing over several elements or pasting: put right
+  /* Safari can leave the caret just outside an empty line, so a letter typed lands in the page itself, not in a
+     line (Alex, 24 Oct: every letter of a dialogue became a line of its own). Such text goes back into the line
+     it came out of (the one before it, else the one after), and the caret goes with it. */
   tidy(){
+    const sel = getSelection();
+    const has = (n) => sel.rangeCount > 0 && (sel.anchorNode === n || !!n.contains?.(sel.anchorNode));
+    const offIn = (n) => { if (n.nodeType === 3) return sel.anchorNode === n ? sel.anchorOffset : n.length; const r = document.createRange(); r.selectNodeContents(n); r.setEnd(sel.anchorNode, sel.anchorOffset); return r.toString().length; };
+    let back = null;
     for (const n of [...this.box.childNodes]){
-      if (n.nodeType === 3){ if (!n.textContent.trim()){ n.remove(); continue; } const p = this.node(el('action', n.textContent)); n.replaceWith(p); continue; }
-      if (n.nodeName !== 'P'){ const p = this.node(el('action', n.innerText || '')); n.replaceWith(p); continue; }
-      if (!n.dataset.t) n.dataset.t = 'action';
-      if (!n.dataset.id || this.box.querySelectorAll(`p[data-id="${CSS.escape(n.dataset.id)}"]`).length > 1) n.dataset.id = uid();
-      n.className = 'e';
-      if (!n.textContent && !n.querySelector('br')) n.appendChild(document.createElement('br'));
+      if (n.nodeName === 'P'){
+        if (!n.dataset.t) n.dataset.t = 'action';
+        if (!n.dataset.id || this.box.querySelectorAll(`p[data-id="${CSS.escape(n.dataset.id)}"]`).length > 1) n.dataset.id = uid();
+        n.className = 'e';
+        if (!n.textContent && !n.querySelector('br')) n.appendChild(document.createElement('br'));
+        continue;
+      }
+      const text = n.nodeType === 3 ? n.data : (n.innerText ?? n.textContent ?? '');
+      const caret = has(n), at = caret ? offIn(n) : 0;
+      // a whole line the browser made (Enter it handled itself): a line of its own
+      if (n.nodeName === 'DIV'){ const p = this.node(el('action', text)); n.replaceWith(p); if (caret) back = [p, at]; continue; }
+      // the line it belongs to: an empty one next to it (the line just begun), else the one before, else after
+      const empty = (x) => x?.nodeName === 'P' && !!x.querySelector(':scope > br:only-child');
+      const before = n.previousSibling?.nodeName === 'P' ? n.previousSibling : null, after = n.nextSibling?.nodeName === 'P' ? n.nextSibling : null;
+      const host = empty(after) ? after : empty(before) ? before : before || after;
+      const prev = host && host === before ? host : null;
+      n.remove();
+      if (!text) continue;
+      if (host){
+        const old = host.querySelector(':scope > br:only-child') ? '' : this.textOf(host);
+        host.textContent = prev ? old + text : text + old;
+        if (caret) back = [host, (prev ? old.length : 0) + at];
+      } else {
+        const p = this.node(el('action', text));
+        this.box.appendChild(p);
+        if (caret) back = [p, at];
+      }
     }
     if (!this.box.children.length) this.box.appendChild(this.node(el('action', '')));
+    if (back) this.place(back[0], back[1]);
   }
   commit(structural = false){
     this.script.els = this.read();
@@ -107,6 +136,8 @@ export class Editor {
       if (left <= n.length){ r.setStart(n, left); r.collapse(true); return this.select(r); }
       left -= n.length;
     }
+    // an empty line: the caret inside it, before its <br> (after it, Safari puts it outside the line)
+    if (p.firstChild?.nodeName === 'BR'){ r.setStart(p, 0); r.collapse(true); return this.select(r); }
     r.selectNodeContents(p); r.collapse(false); this.select(r);
   }
   select(r){ const s = getSelection(); s.removeAllRanges(); s.addRange(r); this.box.focus({ preventScroll: true }); this.caret(); }

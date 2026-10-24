@@ -65,6 +65,7 @@ function menu() {
       { type: 'separator' },
       { label: 'Export PDF…', accelerator: `${cmd}+P`, click: () => send('pdf') },
       { label: 'Save as Final Draft (.fdx)…', click: () => send('fdx') },
+      { label: 'Save as Fade In (.fadein)…', click: () => send('fadein') },
       { label: 'Save as Fountain…', click: () => send('fountain') },
       ...(mac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
     ] },
@@ -105,6 +106,13 @@ ipcMain.handle('rw:save-text', async (_e, name, text) => {
   const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: ext === 'fdx' ? 'Final Draft' : 'Fountain', extensions: [ext] }] })
   if (canceled || !filePath) return false
   fs.writeFileSync(filePath, text, 'utf8')
+  return true
+})
+// a Fade In file is a zip: bytes, not text
+ipcMain.handle('rw:save-bytes', async (_e, name, bytes) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: 'Fade In', extensions: ['fadein'] }] })
+  if (canceled || !filePath) return false
+  fs.writeFileSync(filePath, Buffer.from(bytes))
   return true
 })
 ipcMain.handle('rw:version', () => app.getVersion())

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('rwDesktop', {
   onMenu: (fn) => { const h = (_e, cmd) => fn(String(cmd)); ipcRenderer.on('rw:menu', h); return () => ipcRenderer.removeListener('rw:menu', h) },
   pdf: (html, name, pageSize) => ipcRenderer.invoke('rw:pdf', String(html), String(name), pageSize === 'Letter' ? 'Letter' : 'A4'),
   saveText: (name, text) => ipcRenderer.invoke('rw:save-text', String(name), String(text)),
+  saveBytes: (name, bytes) => ipcRenderer.invoke('rw:save-bytes', String(name), new Uint8Array(bytes)),
   update: {
     state: () => ipcRenderer.invoke('rw:update-state'),
     check: () => ipcRenderer.invoke('rw:update-check'),
