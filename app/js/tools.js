@@ -283,7 +283,8 @@ export function reader(ctx){
   const pill = h('div', { class: 'reader', hidden: true });
   document.body.append(pill);
   let playing = false, paused = false, queue = [], idx = 0, voiceOf = new Map(), lit = null;
-  const stop = () => { playing = false; paused = false; synth?.cancel(); pill.hidden = true; if (lit) delete lit.dataset.reading; lit = null; };
+  let timed = false;
+  const stop = () => { if (timed){ timed = false; ctx.save(); } playing = false; paused = false; synth?.cancel(); pill.hidden = true; if (lit) delete lit.dataset.reading; lit = null; };
   const voicesFor = (lang) => (synth?.getVoices() || []).filter((v) => v.lang?.toLowerCase().startsWith(lang));
   function draw(who){
     pill.hidden = false;
@@ -303,7 +304,11 @@ export function reader(ctx){
     const v = item.voice; if (v){ u.voice = v.voice; u.lang = v.voice?.lang || u.lang; u.pitch = v.pitch; }
     u.lang ||= item.lang;
     u.rate = pref('readRate') || 1;
-    u.onend = () => next(); u.onerror = () => next();
+    // how long each speech really takes, for the running time (Report > Runtime): kept at normal speed
+    let t0 = 0;
+    u.onstart = () => { t0 = performance.now(); };
+    u.onend = () => { if (t0 && item.spoken && !ctx.readOnly()){ (ctx.script.timing ||= {})[item.id] = Math.round((performance.now() - t0) / 1000 * (u.rate || 1) * 10) / 10; timed = true; } next(); };
+    u.onerror = () => next();
     draw(item.who);
     synth.speak(u);
   }
@@ -326,7 +331,7 @@ export function reader(ctx){
       for (const e of els.slice(start)){
         const text = e.x.trim(); if (!text) continue;
         if (e.t === 'character'){ who = cleanName(e.x); continue; }
-        if (e.t === 'dialogue' || e.t === 'lyric') queue.push({ id: e.id, text, who, voice: voiceOf.get(who) || narrator, lang });
+        if (e.t === 'dialogue' || e.t === 'lyric') queue.push({ id: e.id, text, who, voice: voiceOf.get(who) || narrator, lang, spoken: true });
         else if (e.t === 'paren') continue;
         else if (pref('readAction') || e.t === 'scene') queue.push({ id: e.id, text: e.t === 'scene' ? headingSpoken(text, lang) : text, who: e.t === 'scene' ? 'Scene' : 'Action', voice: narrator, lang });
       }

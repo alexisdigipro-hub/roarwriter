@@ -110,3 +110,83 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.roarwriter_list() from public, anon;
 grant execute on function public.roarwriter_list() to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Versions (Alex, 25 Oct 2026): named copies of a script (and one a day on their own), for everyone it is shared
+-- with; editors add them, the owner or whoever made one deletes it.
+create table if not exists public.roarwriter_versions (
+  id         uuid primary key default gen_random_uuid(),
+  script_id  uuid not null references public.roarwriter_scripts(id) on delete cascade,
+  name       text not null default '',
+  data       jsonb not null,
+  meta       jsonb not null default '{}'::jsonb,
+  created_by uuid default auth.uid(),
+  by_name    text not null default '',
+  created_at timestamptz not null default now(),
+  constraint roarwriter_versions_size check (octet_length(data::text) <= 5000000)
+);
+create index if not exists roarwriter_versions_script on public.roarwriter_versions (script_id, created_at desc);
+alter table public.roarwriter_versions enable row level security;
+drop policy if exists roarwriter_versions_read on public.roarwriter_versions;
+drop policy if exists roarwriter_versions_add on public.roarwriter_versions;
+drop policy if exists roarwriter_versions_delete on public.roarwriter_versions;
+create policy roarwriter_versions_read on public.roarwriter_versions for select to authenticated
+  using (public.roarwriter_role(script_id) is not null);
+create policy roarwriter_versions_add on public.roarwriter_versions for insert to authenticated
+  with check (public.roarwriter_role(script_id) in ('owner', 'edit') and created_by = (select auth.uid()));
+create policy roarwriter_versions_delete on public.roarwriter_versions for delete to authenticated
+  using (public.roarwriter_role(script_id) = 'owner' or created_by = (select auth.uid()));
+revoke all on public.roarwriter_versions from anon;
+grant select, insert, delete on public.roarwriter_versions to authenticated;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Who is in the script right now (Collaborate): each person's line, a few seconds old at most; the time is the server's.
+create table if not exists public.roarwriter_presence (
+  script_id uuid not null references public.roarwriter_scripts(id) on delete cascade,
+  user_id   uuid not null default auth.uid(),
+  name      text not null default '',
+  email     text not null default '',
+  el_id     text not null default '',
+  at        timestamptz not null default now(),
+  primary key (script_id, user_id)
+);
+alter table public.roarwriter_presence enable row level security;
+drop policy if exists roarwriter_presence_read on public.roarwriter_presence;
+drop policy if exists roarwriter_presence_mine on public.roarwriter_presence;
+create policy roarwriter_presence_read on public.roarwriter_presence for select to authenticated
+  using (public.roarwriter_role(script_id) is not null);
+create policy roarwriter_presence_mine on public.roarwriter_presence for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()) and public.roarwriter_role(script_id) is not null);
+revoke all on public.roarwriter_presence from anon;
+grant select, insert, update, delete on public.roarwriter_presence to authenticated;
+create or replace function public.roarwriter_presence_at() returns trigger language plpgsql set search_path = public as $$
+begin new.at := now(); new.user_id := auth.uid(); return new; end $$;
+drop trigger if exists roarwriter_presence_at on public.roarwriter_presence;
+create trigger roarwriter_presence_at before insert or update on public.roarwriter_presence
+  for each row execute function public.roarwriter_presence_at();
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Storyboard pictures: a private bucket, a folder per script; the people a script is shared with see its pictures,
+-- its editors add and remove them.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('roarwriter-boards', 'roarwriter-boards', false, 3145728, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+create or replace function public.roarwriter_role_path(p text) returns text
+language sql stable security definer set search_path = public as $$
+  select case when split_part(p, '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then public.roarwriter_role(split_part(p, '/', 1)::uuid) end
+$$;
+revoke all on function public.roarwriter_role_path(text) from public, anon;
+grant execute on function public.roarwriter_role_path(text) to authenticated;
+drop policy if exists roarwriter_boards_read on storage.objects;
+drop policy if exists roarwriter_boards_add on storage.objects;
+drop policy if exists roarwriter_boards_change on storage.objects;
+drop policy if exists roarwriter_boards_delete on storage.objects;
+create policy roarwriter_boards_read on storage.objects for select to authenticated
+  using (bucket_id = 'roarwriter-boards' and public.roarwriter_role_path(name) is not null);
+create policy roarwriter_boards_add on storage.objects for insert to authenticated
+  with check (bucket_id = 'roarwriter-boards' and public.roarwriter_role_path(name) in ('owner', 'edit'));
+create policy roarwriter_boards_change on storage.objects for update to authenticated
+  using (bucket_id = 'roarwriter-boards' and public.roarwriter_role_path(name) in ('owner', 'edit'));
+create policy roarwriter_boards_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'roarwriter-boards' and public.roarwriter_role_path(name) in ('owner', 'edit'));

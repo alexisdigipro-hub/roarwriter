@@ -42,6 +42,8 @@ const TASKS: Record<string, { system?: string, ask: string, json?: boolean, whol
   pacing: { system: READER, whole: true, json: true, ask: 'Rate the dramatic tension of every scene from 1 (calm) to 10 (highest), with what drives it. Answer ONLY with JSON: {"scenes":[{"scene":1,"tension":4,"note":"a few words"}],"summary":"two or three sentences on the rhythm of the whole, and where it sags"}' },
   // the funding / pitch package
   package: { system: READER, whole: true, json: true, ask: 'Write the material a director needs to pitch this script or apply for funding (a film fund, a co-production market). Answer ONLY with JSON: {"title":"","logline":"","tagline":"","short":"a synopsis of one paragraph","long":"a synopsis of about 500 words","treatment":"a treatment in the present tense, about 1200 words, scene by scene in prose","characters":[{"name":"","bio":"three or four sentences"}],"statement":"a first draft of the director\'s statement in the first person, about 300 words: why this story, why now, how it will be told","themes":[""],"audience":"who it is for","comparables":["two or three films or series it sits beside, with year"]}' },
+  // what makes the script expensive to shoot, and how to keep what it gives for less (Alex, 25 Oct)
+  budget: { system: READER, whole: true, json: true, ask: 'You are also an experienced line producer of independent films (think a European or Greek indie budget). Find what makes this script expensive to shoot: night exteriors, crowds and extras, rain, snow, fire, water, stunts, vehicles in motion, animals, children, period settings and costumes, many locations used once, VFX, weapons, specific famous places, music rights, big company moves. For each, say why it costs and a cheaper way to get the same story value. Answer ONLY with JSON: {"summary":"three sentences on how big a shoot this is and where the money goes","level":"micro|low|medium|high","items":[{"scene":12,"what":"night exterior on a moving truck","kind":"night|crowd|weather|stunt|vehicle|animal|child|period|location|vfx|weapon|rights|other","cost":"low|mid|high","why":"one sentence","cheaper":"one or two sentences: the alternative and what it keeps"}],"locations":"one sentence on how the locations could be grouped or merged"} with at most 40 items, most expensive first.' },
   // a scene as shots, for the storyboard
   shots: { json: true, ask: 'Break this scene into the shots a director would storyboard. Answer ONLY with JSON: {"shots":[{"size":"WS|MS|MCU|CU|ECU|OTS|INSERT|POV|2S","angle":"eye level|high|low|overhead|dutch","move":"static|pan|tilt|dolly in|dolly out|tracking|handheld|crane|steadicam","desc":"what we see, in one or two sentences"}]} with between 3 and 14 shots.' },
   // words said aloud, laid out as a script
@@ -70,6 +72,35 @@ function translate(b: any){
     `${b.glossary ? `Write these names exactly like this every time: ${String(b.glossary).slice(0, 4000)}\n\n` : ''}Translate every "x" into ${to}. Answer ONLY with a JSON array of strings, one for each item, in the same order, exactly ${items.length} of them.\n\n${JSON.stringify(items.map((e: any) => ({ t: String(e.t), x: String(e.x).slice(0, 4000) })))}`, 'low')
 }
 
+// a question for the research desk: answered from the web, with its sources (Alex, 25 Oct)
+async function research(b: any){
+  const lang = b.answer === 'el' ? 'Greek' : 'English'
+  const messages: any[] = [{ role: 'user', content: [
+    b.title ? `I am writing the script "${String(b.title).slice(0, 200)}".` : '',
+    b.scene ? `The scene I am on:\n${String(b.scene).slice(-6000)}` : '',
+    `My question: ${String(b.prompt || '').slice(0, 4000)}`,
+    `Answer in ${lang}: precise and practical for a screenwriter (what is true, what details would make the scene authentic, what to avoid), a few short paragraphs. Search the web for it.`,
+  ].filter(Boolean).join('\n\n') }]
+  let text = '', sources: { title: string, url: string }[] = []
+  // the search may pause a long turn: it goes on from where it stopped, a few times at most
+  for (let k = 0; k < 4; k++){
+    const msg: any = await client.beta.messages.create({
+      model: 'claude-opus-5-5', max_tokens: 16000, output_config: { effort: 'medium' },
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      system: 'You are the research desk of RoarWriter, a screenwriting app. You find facts for writers (law, medicine, police procedure, history, places, technology, how people really talk in a job) and say clearly what you could not confirm.',
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
+      messages,
+    } as any)
+    if (msg.stop_reason === 'refusal') throw Object.assign(new Error('refusal'), { refusal: true })
+    for (const c of msg.content){
+      if (c.type === 'text'){ text += c.text; for (const cit of c.citations || []) if (cit.url && !sources.some((x) => x.url === cit.url)) sources.push({ title: cit.title || cit.url, url: cit.url }) }
+    }
+    if (msg.stop_reason !== 'pause_turn') break
+    messages.push({ role: 'assistant', content: msg.content })
+  }
+  return { text: text.trim(), sources: sources.slice(0, 12) }
+}
+
 // the JSON in an answer, whatever is around it
 function json(text: string){
   const t = text.replace(/^```[a-z]*\n?|```\s*$/gm, '').trim()
@@ -91,6 +122,10 @@ Deno.serve(async (req) => {
     if (b.task === 'translate'){
       try { const out = json(await translate(b)); return reply({ items: Array.isArray(out) ? out : [] }) }
       catch (e) { if ((e as any)?.refusal) throw e; return reply({ error: 'The translation came back in a way RoarWriter could not read. Try again.' }, 502) }
+    }
+    if (b.task === 'research'){
+      if (!String(b.prompt || '').trim()) return reply({ error: 'Write the question first.' }, 400)
+      return reply(await research(b))
     }
     const task = TASKS[b.task] ? b.task : 'custom'
     const T = TASKS[task]

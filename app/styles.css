@@ -576,3 +576,63 @@ body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,
 .script p[data-t=character][data-dual]{padding-left:22%} .script p[data-t=paren][data-dual]{padding-left:10%}
 .script p[data-dual=C]{clear:both}
 @media (max-width:1300px){ .fmt-pill.wide-only{display:none} }
+
+/* ---------- the studio (studio.js): versions, alternates, the AI on the whole script ---------- */
+.ai-top{display:flex;flex-direction:column;gap:10px}
+.ai-seg{display:flex} .ai-seg button{flex:1;padding:0 8px}
+.ai-tools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.ai-tools .btn{justify-content:flex-start;padding:0 12px;font-size:12.5px}
+.ai-wait{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;padding:10px 0}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.15);border-top-color:var(--acc);animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cite{display:inline-grid;place-items:center;min-width:24px;height:20px;padding:0 6px;margin:0 2px;border-radius:999px;border:0;background:rgba(255,107,44,.18);color:var(--acc);font:700 11.5px var(--ui);vertical-align:1px;cursor:pointer}
+.cite:hover{background:var(--acc);color:var(--acc-ink)}
+.srcs{display:flex;flex-direction:column;gap:4px;font-size:12.5px} .srcs a{color:var(--acc);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .srcs a:hover{text-decoration:underline}
+/* versions */
+.v-list{display:flex;flex-direction:column;gap:6px}
+.v-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line)}
+.v-row.auto{opacity:.85}
+.v-dot{flex:none;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:rgba(255,255,255,.06);color:var(--muted)} .v-dot svg{width:15px;height:15px}
+.v-who{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px} .v-who b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .v-who small{color:var(--muted);font-size:12px}
+/* comparing */
+.cmp{display:flex;flex-direction:column;gap:12px}
+.cmp-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.chip.cmp-add{color:#5fd38d;background:rgba(48,164,108,.16)} .chip.cmp-chg{color:#ffd166;background:rgba(255,178,36,.14)} .chip.cmp-del{color:#ff8a80;background:rgba(229,72,77,.15)}
+.cmp-page{background:#fffefb;color:#111;border-radius:10px;padding:18px 22px;font:10.5pt/1.25 var(--mono);max-height:62vh;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.cmp-scene{border-bottom:1px dashed #ddd;padding-bottom:12px} .cmp-scene:last-child{border:0}
+.cmp-page p{margin:8px 0 0;white-space:pre-wrap;border-radius:4px;padding:1px 4px}
+.cmp-page p[data-t=scene]{font-weight:700;text-transform:uppercase} .cmp-page p[data-t=character]{margin-left:38%;text-transform:uppercase} .cmp-page p[data-t=dialogue]{margin-left:18%;width:62%} .cmp-page p[data-t=paren]{margin-left:28%}
+.cmp-add{background:rgba(48,164,108,.16)} .cmp-del{background:rgba(229,72,77,.12);text-decoration:line-through;color:#8a2a2a}
+.cmp-page ins{background:rgba(48,164,108,.28);text-decoration:none} .cmp-page del{background:rgba(229,72,77,.22);color:#8a2a2a}
+/* alternates */
+.alt-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.alt{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:16px;background:var(--panel2);border:1px solid var(--line)}
+.alt-h{display:flex;flex-direction:column;gap:2px} .alt-h small{color:var(--muted);font-size:12px}
+.alt-p{max-height:220px;font-size:8.5pt;line-height:8.5pt}
+/* reports */
+.report-w{gap:14px} .rp-bar-top{gap:6px}
+.rp-ul{margin:0 0 6px;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:13.5px;line-height:1.45}
+.cov,.cont,.pack,.bud{display:flex;flex-direction:column;gap:10px}
+.cov h4,.pack h4,.pace h4{margin:6px 0 0;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.cov p,.pack p,.bud p,.cont p{margin:0;line-height:1.5;font-size:14px;white-space:pre-wrap}
+.cov-head{display:flex;align-items:center;gap:12px;padding:14px;border-radius:16px;background:rgba(255,107,44,.08);border:1px solid rgba(255,107,44,.25)}
+.cov-log{font-size:16px!important;font-weight:600}
+.cov-v{flex:none;padding:6px 12px;border-radius:999px;font-weight:800;font-size:12px;letter-spacing:.06em;background:rgba(255,255,255,.1)}
+.v-recommend,.v-micro,.v-low{background:rgba(48,164,108,.25);color:#5fd38d} .v-consider,.v-medium{background:rgba(255,178,36,.22);color:#ffd166} .v-pass,.v-high{background:rgba(229,72,77,.22);color:#ff8a80}
+.cov-scores{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 18px}
+.cont-row,.bud-row{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line)}
+.bud-row{flex-direction:column;gap:6px} .bud-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cont-row > div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.pack-part{padding:12px 14px;border-radius:14px;background:var(--panel2);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.pack-h{display:flex;align-items:center;gap:8px} .pack-h h4{margin:0;flex:1}
+/* runtime and tension */
+.pace{display:flex;flex-direction:column;gap:10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.pace-h{display:flex;align-items:center;gap:8px} .pace-h h4{margin:0}
+.pace-svg{width:100%;height:auto;background:var(--panel2);border-radius:14px;border:1px solid var(--line)}
+.pace-grid{stroke:rgba(255,255,255,.07)} .pace-t{fill:var(--muted);font:10px var(--ui);text-anchor:middle}
+.pace-scene{fill:rgba(255,255,255,.18)} .pace-line{fill:none;stroke:var(--acc);stroke-width:2.2;stroke-linejoin:round}
+.pace-dot{fill:var(--bg);stroke:var(--acc);stroke-width:2;cursor:pointer} .pace-dot:hover{fill:var(--acc)}
+.pace-list .rp-bar{grid-template-columns:minmax(0,1fr) 120px 44px}
+.tr-bar{grid-template-columns:150px 1fr 10px}
+@media (max-width:600px){ .ai-tools{grid-template-columns:1fr} .alt-list{grid-template-columns:1fr} .cmp-page{padding:12px;font-size:9pt} }
+.rp-ul .ai-notes,.cont-row .ai-notes{background:none;border:0;padding:0;font-size:inherit}

@@ -110,3 +110,8 @@ export async function getBoardImage(path){
 export async function removeBoardImage(path){
   try { await fetch(`${SB_URL}/storage/v1/object/roarwriter-boards`, { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [path] }) }); } catch {}
 }
+
+// Collaborate: where each person is (their line), every few seconds; the others seen in the last half minute
+export const putPresence = async (row) => rest('roarwriter_presence?on_conflict=script_id,user_id', { method: 'POST', body: row, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } });
+export const listPresence = (id) => rest(`roarwriter_presence?script_id=eq.${q(id)}&at=gt.${q(new Date(Date.now() - 30000).toISOString())}&select=user_id,name,email,el_id,at`);
+export const leavePresence = (id) => rest(`roarwriter_presence?script_id=eq.${q(id)}&user_id=eq.${q(currentUser()?.id || '')}`, { method: 'DELETE' }).catch(() => {});

@@ -12,6 +12,7 @@ import { decorOf, exportPDF, paginate } from './print.js';
 import { CAT, CATS, breakdownCSV, breakdownOf, clearPaint, findIn, fold, normalizeTags, paintTags } from './breakdown.js';
 import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
 import { VERSION } from './version.js';
+import { autoVersion, openAlternates, openVersions, paceSection, researchPane, scriptPane } from './studio.js';
 
 /* RoarWriter (The Mad Lions Lab, Oct 2026): write screenplays in the industry format, in English or Greek, on a
    computer (the Mac and Windows app) or in a browser (the web version). Signed in with a RoarMe account, the
@@ -292,6 +293,7 @@ async function viewScript(id){
     typeBtn, fmtPill, revChip, pages, viewSeg, h('div', { class: 'spacer' }), saveState,
     iconBtn(I.find, 'Find & replace', () => openFind()),
     iconBtn(I.speak, 'Read aloud', () => readAloud()),
+    iconBtn(I.clock, 'Versions', () => openVersions(ctx)),
     h('button', { class: 'btn wide-only', type: 'button', onclick: () => showBreakdown() }, h('span', { html: I.tag }), h('span', { class: 'lbl' }, 'Breakdown')),
     h('button', { class: 'btn wide-only', type: 'button', onclick: () => share() }, h('span', { html: I.people }), h('span', { class: 'lbl' }, 'Share')),
     exportBtn, scenesBtn, aiBtn, iconBtn(I.gear, 'Settings', () => openSettings(ctx), 'wide-only'), moreBtn);
@@ -407,6 +409,11 @@ async function viewScript(id){
     // a change made by a tool (rename, cards, an alternate): marked as a revision too, unless it clears the marks
     setEls: (els, { mark = true } = {}) => { editor.setEls(els, { mark }); editor.commit(true); },
     pdf: (opts) => pdf(opts), revisionChanged: () => { showRev(); markPages(); },
+    id, caretId: () => caretId, flush: () => store.flush(),
+    // a version brought back: the whole script as it was (title page, settings, lines, cards…)
+    replaceScript: (data) => { const d = normalize(data); for (const k of Object.keys(d)){ if (k === 'titlePage' || k === 'settings'){ Object.keys(script[k]).forEach((x) => delete script[k][x]); Object.assign(script[k], d[k]); } else script[k] = d[k]; } editor.setEls(script.els); editor.commit(true); titleIn.value = script.title || ''; tpPaper.querySelectorAll('.tpf').forEach((f) => { f.textContent = script.titlePage[f.dataset.k] || ''; }); paper.dataset.fmt = fmtOf(script); drawKinds(); showRev(); showPages(); drawSide(); repaint(); save(); },
+    newCopy: async (data) => { await store.flush(); await newScript(data); },
+    showReport: () => { bdView = 'report'; showBreakdown(); },
     goTo: (id, page) => goTo(id, page),
     redecorate: () => { paper.dataset.sn = script.settings.sceneNumbers || 'off'; paper.dataset.names = script.settings.names || 'fd'; markPages(); here(); },
     setFormat: (k) => setFormat(k), setPage: (k) => setPage(k), titlePage: () => titlePage(),
@@ -591,6 +598,8 @@ async function viewScript(id){
   }
   drawSide();
   // the caret where writing goes on: a new script's first empty line (its format's start), else the end
+  // once a day, a version of its own (Versions)
+  setTimeout(() => { if (editor) autoVersion(ctx); }, 8000);
   const first = script.els.find((e) => !e.x.trim()) || script.els[script.els.length - 1];
   editor.focusEl(first.id, first.x.length);
 
@@ -675,7 +684,7 @@ async function viewScript(id){
       const hint = h('p', { class: 'bd-empty' }, 'The cast and the locations come from the script. Select a word on the page and right-click it (on a phone: select it and press Tag) to add props, wardrobe, vehicles and the rest.');
       let list;
       // the report: the script in numbers (pages, scenes, INT/EXT, day and night, locations, who speaks how much)
-      if (bdView === 'report') list = h('div', { class: 'bd-list' }, reportOf(script));
+      if (bdView === 'report') list = h('div', { class: 'bd-list' }, paceSection(ctx, draw), reportOf(script));
       else if (bdView === 'scene'){
         list = h('div', { class: 'bd-list' }, ...rows.map((r) => h('div', { class: 'bd-scene' },
           h('button', { class: 'bd-scene-h', type: 'button', onclick: () => { close(); if (r.id) goTo(r.id); } }, h('span', { class: 'sn' }, r.n ? String(r.n) : '·'), h('span', { class: 'st' }, r.heading || 'Before the first scene'), h('small', {}, [r.ie, r.time].filter(Boolean).join(' · '))),
@@ -706,6 +715,7 @@ async function viewScript(id){
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); setView(view === 'cards' ? 'page' : 'cards'); } }, h('span', {}, view === 'cards' ? 'Back to the page' : 'Cards'), h('kbd', {}, 'the scenes as cards')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); openFind(true); } }, h('span', {}, 'Find & replace'), h('kbd', {}, '')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); readAloud(); } }, h('span', {}, voice.playing ? 'Stop reading' : 'Read aloud'), h('kbd', {}, 'a table read')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); openVersions(ctx); } }, h('span', {}, 'Versions'), h('kbd', {}, 'save, compare, go back')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); openSettings(ctx); } }, h('span', {}, 'Settings'), h('kbd', {}, 'format, page, PDF')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'Export PDF'), h('kbd', {}, 'to send or print')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); sides(); } }, h('span', {}, 'Sides'), h('kbd', {}, 'chosen scenes')),
@@ -763,7 +773,12 @@ async function viewScript(id){
     aiPanel.hidden = !aiPanel.hidden;
     if (!aiPanel.hidden) drawAI();
   }
+  let aiMode = 'scene';
   function drawAI(result){
+    if (aiMode !== 'scene'){
+      aiPanel.replaceChildren(aiHead(), ...(aiMode === 'script' ? scriptPane(ctx) : researchPane(ctx)));
+      return;
+    }
     const prompt = h('textarea', { class: 'input', rows: 3, placeholder: 'Ask about this scene, or say what you want…' });
     const out = h('div', { class: 'ai-out' });
     const run = async (task, label) => {
@@ -783,17 +798,24 @@ async function viewScript(id){
       aiBusy = false;
     };
     aiPanel.replaceChildren(
-      h('div', { class: 'ai-head' }, h('b', { html: I.spark + ' AI' }), h('button', { class: 'ib', title: 'Close', html: I.x, onclick: () => { aiPanel.hidden = true; } })),
+      aiHead(),
       h('p', { class: 'muted small' }, 'Works on the scene with the cursor. Nothing changes until you press Insert or Replace.'),
       h('div', { class: 'ai-quick' },
         h('button', { class: 'btn', onclick: () => run('dialogue', 'Writing dialogue') }, 'Suggest dialogue'),
         h('button', { class: 'btn', onclick: () => run('rewrite', 'Rewriting the scene') }, 'Rewrite scene'),
         h('button', { class: 'btn', onclick: () => run('continue', 'Writing what comes next') }, 'What comes next'),
-        h('button', { class: 'btn', onclick: () => run('ideas', 'Thinking') }, 'Ideas & notes')),
+        h('button', { class: 'btn', onclick: () => run('ideas', 'Thinking') }, 'Ideas & notes'),
+        h('button', { class: 'btn', onclick: () => openAlternates(ctx) }, h('span', { html: I.branch }), 'Alternates')),
       prompt,
       h('button', { class: 'btn primary', onclick: () => { if (!prompt.value.trim()) return toast('Write what you want first.'); run('custom', 'Working'); } }, 'Ask'),
       out);
     if (result) out.replaceChildren(result);
+  }
+  // the AI's top: the three ways it works (the scene, the whole script, the research desk) and Close
+  function aiHead(){
+    return h('div', { class: 'ai-top' },
+      h('div', { class: 'ai-head' }, h('b', { html: I.spark + ' AI' }), h('button', { class: 'ib', title: 'Close', html: I.x, onclick: () => { aiPanel.hidden = true; } })),
+      h('div', { class: 'seg ai-seg' }, ...[['scene', 'Scene'], ['script', 'Whole script'], ['research', 'Research']].map(([k, l]) => h('button', { type: 'button', class: aiMode === k ? 'on' : '', onclick: () => { aiMode = k; drawAI(); } }, l))));
   }
   function showResult(out, task, text, a, b){
     const notes = task === 'ideas';

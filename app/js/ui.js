@@ -27,7 +27,8 @@ export function toast(msg, { action, fn } = {}){
 // a window over the page; returns its close()
 export function modal(title, body, { wide = false, onClose } = {}){
   const close = () => { bg.remove(); document.removeEventListener('keydown', esc); onClose?.(); };
-  const esc = (e) => { if (e.key === 'Escape') close(); };
+  // Escape closes the window on top only (a comparison opened from Versions goes back to Versions)
+  const esc = (e) => { if (e.key === 'Escape' && [...document.querySelectorAll('.modal-bg')].pop() === bg){ e.stopImmediatePropagation(); close(); } };
   const bg = h('div', { class: 'modal-bg', onclick: (e) => { if (e.target === bg) close(); } },
     h('div', { class: 'modal' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true' },
       h('div', { class: 'modal-head' }, h('h3', {}, title), h('button', { class: 'ib', type: 'button', title: 'Close', 'aria-label': 'Close', html: I.x, onclick: () => close() })),
