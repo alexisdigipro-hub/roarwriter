@@ -5,6 +5,8 @@ export function h(tag, attrs = {}, ...kids){
     if (v == null || v === false) continue;
     if (k === 'class') e.className = v;
     else if (k === 'html') e.innerHTML = v;
+    // a textarea shows its value only through the property (the attribute is ignored)
+    else if (k === 'value' && e.tagName === 'TEXTAREA') e.value = v;
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (k in e && typeof v !== 'string') e[k] = v;
     else e.setAttribute(k, v === true ? '' : v);

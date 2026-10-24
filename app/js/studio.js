@@ -248,7 +248,7 @@ const ask = (ctx, task, extra = {}) => askAI({ task, script: scriptForAI(ctx.scr
 const list = (items, f = (x) => x) => h('ul', { class: 'rp-ul' }, ...(items || []).filter(Boolean).map((x) => h('li', {}, f(x))));
 const sceneBtn = (ctx, n, close) => { const s = scenesOf(ctx.script.els)[+n - 1]; return s ? h('button', { type: 'button', class: 'cite', title: s.text, onclick: () => { close(); ctx.goTo(s.id, true); } }, String(n)) : null; };
 // a PDF of a report: in the app a file, in a browser the print window
-async function docPDF(title, html, file){
+export async function docPDF(title, html, file){
   const page = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
   body{font:11pt/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;color:#111;margin:0;padding:18mm 18mm}h1{font-size:20pt;margin:0 0 4mm}h2{font-size:13pt;margin:7mm 0 2mm;color:#c2410c}h3{font-size:11pt;margin:4mm 0 1mm}
   p{margin:0 0 3mm;white-space:pre-wrap}ul{margin:0 0 3mm;padding-left:5mm}.muted{color:#666}.chip{display:inline-block;padding:1mm 3mm;border:1px solid #ccc;border-radius:3mm;margin:0 2mm 2mm 0;font-size:9pt}
