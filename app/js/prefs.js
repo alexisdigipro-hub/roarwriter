@@ -12,6 +12,8 @@ const DEFAULTS = {
   readAction: true,     // reading aloud reads the action too, not only the dialogue
   readRate: 1,          // how fast it reads
   format: 'film',       // the format a new script is offered first
+  pageSize: 'a4',       // a new script's page, its title page's author, credit and contact, and its scene numbers
+  author: '', credit: '', contact: '', sceneNumbers: 'off',
 };
 
 let prefs = (() => { try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { ...DEFAULTS }; } })();
