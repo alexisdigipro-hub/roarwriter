@@ -1,10 +1,11 @@
 import { addShare, authMessage, askAI, currentUser, listShares, myRole, onAuth, recover, removeShare, setShareRole, signIn, signOut, signUp } from './cloud.js';
 import { createStore } from './store.js';
-import { LABEL, TYPES, blankScript, charactersOf, isGreek, metaOf, normalize, pageCount, scenesOf, upper } from './model.js';
+import { blankScript, charactersOf, isGreek, metaOf, normalize, pageCount, scenesOf, upper } from './model.js';
 import { Editor } from './editor.js';
 import { fountainToEls, parseFountain, toFountain } from './fountain.js';
 import { parseFdx, toFdx } from './fdx.js';
 import { parseFadein, toFadein } from './fadein.js';
+import { FORMATS, FORMAT_LIST, fmtOf, formatCSS, kindsOf, labelOf, startOf } from './formats.js';
 import { exportPDF, paginate } from './print.js';
 import { CAT, CATS, breakdownCSV, breakdownOf, clearPaint, findIn, fold, normalizeTags, paintTags } from './breakdown.js';
 import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
@@ -14,6 +15,8 @@ import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
    scripts follow the person to every device. */
 
 const app = document.getElementById('app');
+// each format's own page (formats.js), once for the whole app
+document.head.append(h('style', {}, formatCSS('.paper', (t) => `.script p[data-t=${t}]`)));
 const DESKTOP = !!window.rwDesktop;
 if (DESKTOP) document.documentElement.dataset.desktop = window.rwDesktop.platform;
 let store = null;
@@ -94,7 +97,7 @@ async function viewLibrary(){
       h('h1', { class: 'top-title' }, 'Scripts'),
       search,
       h('button', { class: 'btn', onclick: importScript }, h('span', { html: I.import }), h('span', { class: 'lbl' }, 'Import')),
-      h('button', { class: 'btn primary', onclick: () => newScript() }, h('span', { html: I.plus }), h('span', { class: 'lbl' }, 'New script')),
+      h('button', { class: 'btn primary', onclick: () => pickFormat() }, h('span', { html: I.plus }), h('span', { class: 'lbl' }, 'New script')),
       h('button', { class: 'ib', title: user.email, 'aria-label': 'Account', html: I.user, onclick: account })),
     h('main', { class: 'lib' }, grid));
   let list = [];
@@ -103,7 +106,7 @@ async function viewLibrary(){
     const shown = list.filter((s) => !w || [s.title, s.meta?.author].join(' ').toLowerCase().includes(w));
     if (!list.length){
       grid.replaceChildren(h('div', { class: 'empty' }, h('b', {}, 'Your first script'), h('span', {}, 'Start a new one, or bring one in from Final Draft (.fdx), Fade In (.fadein) or Fountain.'),
-        h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => newScript() }, 'New script'), h('button', { class: 'btn', onclick: importScript }, 'Import'))));
+        h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => pickFormat() }, 'New script'), h('button', { class: 'btn', onclick: importScript }, 'Import'))));
       return;
     }
     grid.replaceChildren(...shown.map((s) => h('article', { class: 'tile', tabindex: 0, onclick: () => { location.hash = '#s/' + s.id; }, onkeydown: (e) => { if (e.key === 'Enter') location.hash = '#s/' + s.id; } },
@@ -111,6 +114,7 @@ async function viewLibrary(){
       h('div', { class: 'tile-body' },
         h('div', { class: 'tile-title' }, s.title || 'Untitled'),
         h('div', { class: 'chips' },
+          s.meta?.format && s.meta.format !== 'film' ? h('span', { class: 'chip fmt' }, FORMATS[s.meta.format]?.label || '') : null,
           h('span', { class: 'chip' }, `${s.meta?.pages || 1} ${s.meta?.pages === 1 ? 'page' : 'pages'}`),
           h('span', { class: 'chip' }, `${s.meta?.scenes || 0} ${s.meta?.scenes === 1 ? 'scene' : 'scenes'}`),
           s.role && s.role !== 'owner' ? h('span', { class: 'chip shared' }, h('span', { html: I.people }), s.owner_name ? `by ${s.owner_name}` : 'Shared', s.role === 'view' ? ' · view' : '') : null,
@@ -140,10 +144,30 @@ function account(){
     h('button', { class: 'btn', onclick: async () => { await store?.flush(); await signOut(); close(); } }, 'Sign out')));
 }
 
-async function newScript(data, open = true){
+/* a new script: first its format (Feature Film, TV, Stage Play…); each one begins as its format does */
+function pickFormat(){
+  const close = modal('New script', h('div', { class: 'fmt-grid' }, ...FORMAT_LIST.map((k) => h('button', { type: 'button', class: 'fmt-tile', onclick: () => { close(); newScript(null, true, k); } },
+    h('span', { class: 'fmt-mini', 'data-fmt': k, 'aria-hidden': 'true' }, ...miniOf(k)),
+    h('b', {}, FORMATS[k].label), h('small', {}, FORMATS[k].note)))), { wide: true });
+}
+// a few lines of each format, drawn as its page looks
+function miniOf(k){
+  const L = (t, w) => h('i', { class: 'm-' + t, style: `width:${w}%` });
+  if (k === 'av') return [L('scene', 40), h('span', { class: 'm-av' }, L('video', 90), L('audio', 80)), h('span', { class: 'm-av' }, L('video', 70), L('audio', 95))];
+  if (k === 'stage' || k === 'musical') return [L('act', 30), L('scene', 26), L('action', 55), L('character', 22), L('dialogue', 95), k === 'musical' ? L('lyric', 60) : L('dialogue', 70), L('character', 22), L('dialogue', 85)];
+  if (k === 'comic') return [L('page', 35), L('panel', 25), L('action', 90), L('character', 20), L('dialogue', 55), L('caption', 50), L('panel', 25), L('action', 80)];
+  if (k === 'audio') return [L('scene', 55), L('sound', 45), L('character', 22), L('dialogue', 70), L('music', 40), L('character', 22), L('dialogue', 60)];
+  return [k === 'film' ? null : L('act', 30), L('scene', 60), L('action', 90), L('character', 20), L('dialogue', 50), k === 'multicam' ? L('dialogue', 45) : L('action', 75), L('character', 20), L('dialogue', 45)].filter(Boolean);
+}
+
+async function newScript(data, open = true, format = 'film'){
   const id = crypto.randomUUID();
   const s = normalize(data || blankScript('Untitled'));
-  if (!data){ s.titlePage.author = currentUser()?.user_metadata?.name || ''; }
+  if (!data){
+    s.titlePage.author = currentUser()?.user_metadata?.name || '';
+    s.settings.format = format;
+    s.els = startOf(format).map(([t, x]) => ({ id: crypto.randomUUID().slice(0, 8), t, x }));
+  }
   store.save(id, s);
   await store.flush();
   if (open) location.hash = '#s/' + id;
@@ -227,7 +251,7 @@ async function viewScript(id){
   };
 
   // the page
-  const paper = h('div', { class: 'paper' + (script.settings.page === 'letter' ? ' letter' : '') });
+  const paper = h('div', { class: 'paper' + (script.settings.page === 'letter' ? ' letter' : ''), 'data-fmt': fmtOf(script) });
   /* the title page, written on the page itself as Final Draft lays it out (Alex, 24 Oct): the title and the
      episode underlined in the middle, the credit and the author under them, the copyright, the draft and the
      contact at the foot on the left. An empty line shows what goes there, and does not print. */
@@ -274,7 +298,9 @@ async function viewScript(id){
   const aiPanel = h('aside', { class: 'ai', hidden: true });
 
   // phones and tablets: the kinds of line over the keyboard (there is no Tab there), with undo and redo
-  const kinds = h('div', { class: 'kinds-in' }, ...TYPES.map(([k, l]) => h('button', { type: 'button', 'data-k': k, onmousedown: (e) => e.preventDefault(), onclick: () => editor.setCurrentType(k) }, SHORT[k] || l)));
+  const kinds = h('div', { class: 'kinds-in' });
+  const drawKinds = () => kinds.replaceChildren(...kindsOf(script).map(([k, l]) => h('button', { type: 'button', 'data-k': k, onmousedown: (e) => e.preventDefault(), onclick: () => editor.setCurrentType(k) }, SHORT[l] || l)));
+  drawKinds();
   const tagBtn = h('button', { class: 'btn primary tag-btn', type: 'button', onmousedown: (e) => e.preventDefault(), onclick: () => { const r = tagBtn.getBoundingClientRect(); tagMenu(r.left, r.top, true); } }, h('span', { html: I.tag }), 'Tag');
   const kindBar = h('div', { class: 'kindbar' },
     tagBtn,
@@ -288,7 +314,7 @@ async function viewScript(id){
   editor = new Editor(paper, script, {
     onChange: () => { save(); showPages(); clearTimeout(sideT); sideT = setTimeout(drawSide, 250); repaint(); },
     onCaret: ({ type, id: eid }) => {
-      typeBtn.querySelector('.type-l').textContent = LABEL[type] || 'Action';
+      typeBtn.querySelector('.type-l').textContent = labelOf(script, type);
       kinds.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === type));
       const on = kinds.querySelector('.on');
       if (on && kinds.clientWidth && (on.offsetLeft < kinds.scrollLeft || on.offsetLeft + on.offsetWidth > kinds.scrollLeft + kinds.clientWidth)) kinds.scrollLeft = on.offsetLeft - (kinds.clientWidth - on.offsetWidth) / 2;
@@ -396,7 +422,8 @@ async function viewScript(id){
     draw();
   }
   drawSide();
-  const first = script.els[script.els.length - 1];
+  // the caret where writing goes on: a new script's first empty line (its format's start), else the end
+  const first = script.els.find((e) => !e.x.trim()) || script.els[script.els.length - 1];
   editor.focusEl(first.id, first.x.length);
 
   const keys = (e) => {
@@ -418,7 +445,7 @@ async function viewScript(id){
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
-    const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...TYPES.map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (DESKTOP && navigator.platform.includes('Mac') ? '⌘' : navigator.platform.includes('Mac') ? '⌃' : 'Ctrl ') + n))),
+    const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...kindsOf(script).map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (DESKTOP && navigator.platform.includes('Mac') ? '⌘' : navigator.platform.includes('Mac') ? '⌃' : 'Ctrl ') + n))),
       h('p', { class: 'menu-hint' }, 'Enter goes on to what usually comes next. Tab changes the kind.'));
     showMenu(menu);
   }
@@ -521,11 +548,19 @@ async function viewScript(id){
     if (window.rwDesktop?.saveText){ const ok = await window.rwDesktop.saveText(name, text); if (ok) toast('Saved'); }
     else download(name, text, kind === 'fdx' ? 'application/xml' : 'text/plain');
   }
+  function setFormat(k){
+    script.settings.format = k;
+    paper.dataset.fmt = k;
+    drawKinds(); editor.caret(); save(); repaint();
+    toast(FORMATS[k].label);
+  }
   function titlePage(){
     const tp = script.titlePage;
     const f = (k, label, area) => h('label', { class: 'field' }, h('span', {}, label), h(area ? 'textarea' : 'input', { class: 'input', value: tp[k] || '', rows: area ? 3 : undefined, oninput: (e) => { tp[k] = e.target.value; if (k === 'title'){ script.title = e.target.value; titleIn.value = e.target.value; } const on = tpPaper.querySelector(`.tpf[data-k="${k}"]`); if (on) on.textContent = e.target.value; save(); } }));
     const page = h('div', { class: 'seg' }, ...[['a4', 'A4'], ['letter', 'US Letter']].map(([k, l]) => h('button', { type: 'button', class: script.settings.page === k ? 'on' : '', onclick: (e) => { script.settings.page = k; [...page.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); paper.classList.toggle('letter', k === 'letter'); tpPaper.classList.toggle('letter', k === 'letter'); save(); } }, l)));
-    modal('Title page', h('div', { class: 'stack' }, f('title', 'Title'), f('episode', 'Episode'), h('div', { class: 'row2' }, f('credit', 'Credit'), f('author', 'Author')), h('div', { class: 'row2' }, f('copyright', 'Copyright'), f('draftDate', 'Draft / date')), f('contact', 'Contact', true),
+    // the format can change later: the lines keep their kinds, the page is laid out as the new format has it
+    const fmt = h('select', { class: 'input', onchange: (e) => setFormat(e.target.value) }, ...FORMAT_LIST.map((k) => h('option', { value: k, selected: fmtOf(script) === k }, FORMATS[k].label)));
+    modal('Title page', h('div', { class: 'stack' }, h('label', { class: 'field' }, h('span', {}, 'Format'), fmt), f('title', 'Title'), f('episode', 'Episode'), h('div', { class: 'row2' }, f('credit', 'Credit'), f('author', 'Author')), h('div', { class: 'row2' }, f('copyright', 'Copyright'), f('draftDate', 'Draft / date')), f('contact', 'Contact', true),
       h('div', { class: 'field' }, h('span', {}, 'Page size'), page)));
   }
 
@@ -554,7 +589,7 @@ async function viewScript(id){
       aiBusy = true;
       out.replaceChildren(h('p', { class: 'muted' }, `${label}…`));
       try {
-        const r = await askAI({ task, prompt: prompt.value.trim(), title: script.title, lang,
+        const r = await askAI({ task, prompt: prompt.value.trim(), title: script.title, lang, format: FORMATS[fmtOf(script)].label,
           characters: charactersOf(script.els).map((c) => c.name).slice(0, 30),
           scene: toFountain({ els: sceneEls }, { titlePage: false }), before: toFountain({ els: before }, { titlePage: false }) });
         showResult(out, task, r.text || '', a, b);
@@ -625,7 +660,7 @@ function pageZoom(paper, desk){
 }
 
 // short names for the kinds on the phone's bar
-const SHORT = { scene: 'Scene', paren: '(Paren)', general: 'Plain' };
+const SHORT = { 'Scene Heading': 'Scene', Parenthetical: '(Paren)', 'Unformatted Text': 'Plain', 'Stage Direction': 'Direction', 'Panel Description': 'Description', 'Sound (SFX)': 'SFX' };
 
 /* The kinds bar stays on the keyboard: a phone's keyboard covers the bottom of the window without making it any
    smaller, so the bar is lifted by what the visible part (visualViewport) leaves out, and the line being written

@@ -1,4 +1,5 @@
 import { upper } from './model.js';
+import { breaksBefore, fmtOf, formatCSS } from './formats.js';
 
 /* The script laid out on real pages, as the industry format has it (Courier 12, 1.5" left, 1" right, top and
    bottom, character at 3.7", dialogue 2.5"-6", parenthetical 3.1"-5.4", transitions to the right), measured
@@ -32,25 +33,32 @@ export const PRINT_CSS = `
 @media print{html,body{margin:0;background:#fff}}
 `;
 
+// each format's own page (formats.js), on the printed lines
+const FORMAT_CSS = formatCSS('.rwprint', (t) => `.p.${t}`);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const shown = (e) => (['scene', 'character', 'transition', 'shot'].includes(e.t) ? upper(e.x) : e.x);
+const shown = (e) => (['scene', 'character', 'transition', 'shot', 'act', 'endact', 'page', 'panel'].includes(e.t) ? upper(e.x) : e.x);
+const HEADS = ['scene', 'act', 'page', 'panel'];
+const SPOKEN = ['dialogue', 'paren', 'lyric'];
 
-// what has to stay together on a page: a heading with what follows it, a name with its lines
+// what has to stay together on a page: a heading with what follows it (an act with its first scene and its
+// first lines), a name with its lines, a video with its audio
 function units(els){
-  const out = [];
+  const raw = [];
   for (let i = 0; i < els.length; i++){
     const e = els[i];
-    if (!e.x.trim() && e.t !== 'scene') continue;
+    if (!e.x.trim() && !HEADS.includes(e.t)) continue;
     if (e.t === 'character'){
       const u = [e];
-      while (els[i + 1] && (els[i + 1].t === 'dialogue' || els[i + 1].t === 'paren')) u.push(els[++i]);
-      out.push(u);
-    } else if (e.t === 'scene' && els[i + 1] && els[i + 1].t !== 'scene'){
-      const u = [e];
-      if (els[i + 1].t === 'character'){ u.push(els[++i]); while (els[i + 1] && (els[i + 1].t === 'dialogue' || els[i + 1].t === 'paren')) u.push(els[++i]); }
-      else u.push(els[++i]);
-      out.push(u);
-    } else out.push([e]);
+      while (els[i + 1] && SPOKEN.includes(els[i + 1].t)) u.push(els[++i]);
+      raw.push(u);
+    } else if (e.t === 'video' && els[i + 1]?.t === 'audio') raw.push([e, els[++i]]);
+    else raw.push([e]);
+  }
+  const out = [];
+  for (let i = 0; i < raw.length; i++){
+    const u = [...raw[i]];
+    while (HEADS.includes(u[u.length - 1].t) && raw[i + 1]) u.push(...raw[++i]);
+    out.push(u);
   }
   return out;
 }
@@ -59,9 +67,10 @@ export function paginate(script){
   const letter = script.settings?.page === 'letter';
   const host = document.createElement('div');
   host.className = 'rwprint' + (letter ? ' letter' : '');
+  host.dataset.fmt = fmtOf(script);
   host.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden';
   const style = document.createElement('style');
-  style.textContent = PRINT_CSS;
+  style.textContent = PRINT_CSS + FORMAT_CSS;
   host.appendChild(style);
   const pg = document.createElement('div');
   pg.className = 'pg';
@@ -74,7 +83,10 @@ export function paginate(script){
   const pages = [[]];
   const mk = (e) => { const d = document.createElement('div'); d.className = 'p ' + e.t; d.textContent = shown(e) || ' '; return d; };
   const fits = () => body.scrollHeight <= limit + 1;
+  const breaks = breaksBefore(script);
   for (const u of units(script.els)){
+    // a new act (a sitcom's every scene, a comic's page) starts its own page
+    if (breaks.includes(u[0].t) && body.children.length){ body.replaceChildren(); pages.push([]); }
     const nodes = u.map(mk);
     nodes.forEach((n) => body.appendChild(n));
     if (fits()){ pages[pages.length - 1].push(...u); continue; }
@@ -105,8 +117,8 @@ export function printHTML(script, { titlePage = true } = {}){
   const body = pages.map((els, i) => `<section class="pg">${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}">${esc(shown(e)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(script.title || 'Script')}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cousine:ital,wght@0,400;0,700;1,400&display=swap">
-<style>${PRINT_CSS}@page{size:${letter ? '8.5in 11in' : 'A4'};margin:0}</style></head>
-<body class="rwprint${letter ? ' letter' : ''}" style="margin:0">${title}${body}</body></html>`;
+<style>${PRINT_CSS}${FORMAT_CSS}@page{size:${letter ? '8.5in 11in' : 'A4'};margin:0}</style></head>
+<body class="rwprint${letter ? ' letter' : ''}" data-fmt="${fmtOf(script)}" style="margin:0">${title}${body}</body></html>`;
 }
 
 // the PDF: in the app, Electron prints the pages to a file; in a browser, they open in a tab to print or save

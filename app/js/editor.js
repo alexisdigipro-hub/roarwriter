@@ -1,4 +1,5 @@
-import { LABEL, NEXT, SCENE_START, TIMES, TYPES, charactersOf, el, isGreek, placesOf, tabType, upper, uid } from './model.js';
+import { LABEL, SCENE_START, TIMES, charactersOf, el, isGreek, placesOf, upper, uid } from './model.js';
+import { formatOf, kindsOf, nextOf, tabOf } from './formats.js';
 import { fountainToEls } from './fountain.js';
 
 /* The page you write on: one editable block holding a <p> per element (data-t = its kind), laid out on the
@@ -102,11 +103,17 @@ export class Editor {
   changed(){
     this.tidy();
     const p = this.current();
-    // INT. / EXT. / ΕΣΩΤ. typed at the start of an action makes it a scene heading; "CUT TO:" a transition
-    if (p && p.dataset.t === 'action'){
-      const t = this.textOf(p);
-      if (SCENE_START.test(t) && !t.includes('\n')) this.setType(p, 'scene', false);
-      else if (/^[A-ZΑ-Ω ]+TO:$/.test(t.trim()) || /^ΚΟΒΕΙ ΣΕ:$/.test(t.trim())) this.setType(p, 'transition', false);
+    // INT. / EXT. / ΕΣΩΤ. typed at the start of an action makes it a scene heading; "CUT TO:" a transition; in a
+    // play ACT / ΠΡΑΞΗ and SCENE / ΣΚΗΝΗ, in a comic PAGE / ΣΕΛΙΔΑ and PANEL / ΚΑΡΕ do the same for theirs
+    const f = formatOf(this.script), has = (k) => f.kinds.includes(k);
+    if (p && p.dataset.t === f.base && f.base === 'action'){
+      const t = this.textOf(p), one = !t.includes('\n');
+      if (one && has('act') && /^(ACT|ΠΡΑΞΗ)\s+\S/i.test(t) && !has('page') && (f.kinds[0] === 'act')) this.setType(p, 'act', false);
+      else if (one && has('scene') && f.kinds[0] === 'act' && /^(SCENE|ΣΚΗΝΗ)\s+\S/i.test(t)) this.setType(p, 'scene', false);
+      else if (one && has('page') && /^(PAGE|ΣΕΛΙΔΑ)\s+\S/i.test(t)) this.setType(p, 'page', false);
+      else if (one && has('panel') && /^(PANEL|ΚΑΡΕ)\s+\S/i.test(t)) this.setType(p, 'panel', false);
+      else if (one && has('scene') && f.kinds[0] !== 'act' && SCENE_START.test(t)) this.setType(p, 'scene', false);
+      else if (has('transition') && (/^[A-ZΑ-Ω ]+TO:$/.test(t.trim()) || /^ΚΟΒΕΙ ΣΕ:$/.test(t.trim()))) this.setType(p, 'transition', false);
     }
     this.commit(false);
     this.suggest();
@@ -178,11 +185,11 @@ export class Editor {
     }
     // Cmd or Ctrl and a number picks the kind, as in Final Draft (by the key's place, so a Greek keyboard works too);
     // a browser keeps Cmd+1..9 for its tabs, so there Ctrl+1..7 does it
-    const digit = (e.code || '').match(/^(?:Digit|Numpad)([0-7])$/)?.[1] ?? (/^[0-7]$/.test(e.key) ? e.key : null);
-    if (mod && !e.altKey && !e.shiftKey && digit != null){ const k = TYPES.find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
+    const digit = (e.code || '').match(/^(?:Digit|Numpad)([0-9])$/)?.[1] ?? (/^[0-9]$/.test(e.key) ? e.key : null);
+    if (mod && !e.altKey && !e.shiftKey && digit != null){ const k = kindsOf(this.script).find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
     if (mod && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); return; }
     if (mod && e.key === 'y'){ e.preventDefault(); this.doRedo(); return; }
-    if (e.key === 'Tab'){ e.preventDefault(); const p = this.current(); if (p) this.setType(p, tabType(p.dataset.t, e.shiftKey)); return; }
+    if (e.key === 'Tab'){ e.preventDefault(); const p = this.current(); if (p) this.setType(p, tabOf(this.script, p.dataset.t, e.shiftKey)); return; }
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); this.enter(); return; }
     if (e.key === 'Enter' && e.shiftKey){ e.preventDefault(); document.execCommand('insertLineBreak'); return; }
   }
@@ -195,13 +202,14 @@ export class Editor {
     const t = p.dataset.t;
     const text = this.textOf(p);
     const at = this.offset(p);
-    // Enter on an empty character, dialogue or parenthetical goes back to action, as Final Draft does
-    if (!text.trim() && ['character', 'dialogue', 'paren', 'transition', 'shot'].includes(t)){ this.setType(p, 'action'); return; }
+    // Enter on an empty character, dialogue or parenthetical goes back to action (the format's base), as Final Draft does
+    const base = formatOf(this.script).base;
+    if (!text.trim() && t !== base && ['character', 'dialogue', 'paren', 'transition', 'shot', 'lyric', 'sound', 'music', 'caption', 'endact'].includes(t)){ this.setType(p, base); return; }
     // inside the parentheses of a parenthetical: out of them, on to the dialogue
     const before = text.slice(0, at), after = text.slice(at);
     let next;
     if (!after || (t === 'paren' && after === ')')){
-      next = this.node(el(NEXT[t], ''));
+      next = this.node(el(nextOf(this.script, t), ''));
       p.after(next);
       this.place(next, 0);
     } else {

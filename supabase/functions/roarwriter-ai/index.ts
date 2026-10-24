@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
     const lang = b.lang === 'el' ? 'Greek' : 'English'
     const user = [
       `Script: ${String(b.title || 'Untitled').slice(0, 200)} (written in ${lang})`,
+      b.format ? `Format: ${String(b.format).slice(0, 60)} (write in this format's conventions: a stage play has stage directions and no camera, a sitcom is multi-camera, an AV script pairs VIDEO and AUDIO)` : '',
       Array.isArray(b.characters) && b.characters.length ? `Characters so far: ${b.characters.slice(0, 40).join(', ')}` : '',
       b.before ? `What comes before the scene (for context):\n${cut(b.before, 12000)}` : '',
       `The scene:\n${scene || '(empty)'}`,

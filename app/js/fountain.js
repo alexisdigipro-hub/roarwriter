@@ -12,7 +12,7 @@ export function parseFountain(text){
   const src = String(text || '').replace(/\r\n?/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\[\[[\s\S]*?\]\]/g, '');
   let lines = src.split('\n');
   // title page: Key: value lines at the very top, up to the first blank line
-  if (/^(title|episode|credit|author|authors|source|draft date|date|contact|copyright|notes)\s*:/i.test(lines[0] || '')){
+  if (/^(title|episode|credit|author|authors|source|draft date|date|contact|copyright|notes|format)\s*:/i.test(lines[0] || '')){
     let i = 0, key = '';
     const tp = {};
     for (; i < lines.length && lines[i].trim() !== ''; i++){
@@ -22,6 +22,7 @@ export function parseFountain(text){
     }
     s.titlePage = { title: tp.title || '', episode: tp.episode || '', credit: tp.credit || 'Written by', author: tp.author || tp.authors || '', copyright: tp.copyright || '', contact: tp.contact || '', draftDate: tp['draft date'] || '' };
     s.title = s.titlePage.title.split('\n')[0] || '';
+    if (tp.format) s.settings.format = tp.format.trim().toLowerCase();
     lines = lines.slice(i + 1);
   }
   const els = [];
@@ -37,9 +38,12 @@ export function parseFountain(text){
       els.push(el('scene', line.replace(/^\./, '').replace(/\s*#[^#]+#$/, '')));
       i++; continue;
     }
-    if (/^>.*<$/.test(line)){ els.push(el('action', line.slice(1, -1).trim())); i++; continue; } // centred
+    // centred: an act (ACT ONE, TEASER, COLD OPEN), its end, or centred action
+    if (/^>.*<$/.test(line)){ const c = line.slice(1, -1).trim(); els.push(el(/^(END OF|ΤΕΛΟΣ)\b/i.test(c) ? 'endact' : /^(ACT|TEASER|COLD OPEN|PROLOGUE|EPILOGUE|ΠΡΑΞΗ|ΠΡΟΛΟΓΟΣ|ΕΠΙΛΟΓΟΣ)\b/i.test(c) ? 'act' : 'action', c)); i++; continue; }
+    if (/^~/.test(line)){ els.push(el('lyric', line.slice(1).trim())); i++; continue; }
     if (/^>/.test(line) || (TRANS.test(line) && blankAt(i - 1) && blankAt(i + 1))){ els.push(el('transition', line.replace(/^>\s*/, ''))); i++; continue; }
-    if (/^!/.test(line)){ els.push(el('action', line.slice(1))); i++; continue; }
+    // forced action, or the kinds other formats write that way (a comic's PAGE and PANEL, sound, music, AV)
+    if (/^!/.test(line)){ const x = line.slice(1); const k = /^(PAGE|ΣΕΛΙΔΑ)\s+\S/i.test(x) ? 'page' : /^(PANEL|ΚΑΡΕ)\s+\S/i.test(x) ? 'panel' : /^(SFX|SOUND|ΗΧΟΣ)\b/i.test(x) ? 'sound' : /^(MUSIC|ΜΟΥΣΙΚΗ)\b/i.test(x) ? 'music' : /^CAPTION\b/i.test(x) ? 'caption' : /^VIDEO:/i.test(x) ? 'video' : /^AUDIO:/i.test(x) ? 'audio' : 'action'; els.push(el(k, k === 'video' || k === 'audio' ? x.replace(/^\w+:\s*/, '') : x)); i++; continue; }
     // a character: @forced, or an all-capital line with something under it
     if ((/^@/.test(line) || (isUpperLine(line.replace(/\(.*?\)/g, '')) && !/^[\d\p{P}\p{S}\s]+$/u.test(line))) && blankAt(i - 1) && !blankAt(i + 1)){
       els.push(el('character', line.replace(/^@/, '').replace(/\s*\^$/, '')));
@@ -47,6 +51,7 @@ export function parseFountain(text){
       while (i < lines.length && lines[i].trim() !== ''){
         const d = lines[i].trim();
         if (/^\(.*\)$/.test(d)) els.push(el('paren', d));
+        else if (/^~/.test(d)) els.push(el('lyric', d.slice(1).trim()));
         else {
           const last = els[els.length - 1];
           if (last.t === 'dialogue') last.x += '\n' + d; else els.push(el('dialogue', d));
@@ -78,19 +83,25 @@ export function toFountain(script, { titlePage = true } = {}){
     if (tp.copyright) out.push(`Copyright: ${tp.copyright}`);
     if (tp.draftDate) out.push(`Draft date: ${tp.draftDate}`);
     if (tp.contact) out.push(`Contact:\n${tp.contact.split('\n').map((l) => '    ' + l).join('\n')}`);
+    if (script.settings?.format && script.settings.format !== 'film') out.push(`Format: ${script.settings.format}`);
     out.push('');
   }
   const els = script.els || [];
   els.forEach((e, i) => {
     const x = e.x || '';
     const prev = els[i - 1];
-    const tight = (e.t === 'dialogue' || e.t === 'paren') && prev && (prev.t === 'character' || prev.t === 'dialogue' || prev.t === 'paren');
+    const tight = ['dialogue', 'paren', 'lyric'].includes(e.t) && prev && ['character', 'dialogue', 'paren', 'lyric'].includes(prev.t);
     if (i && !tight) out.push('');
     if (e.t === 'scene') out.push(SCENE_START.test(upper(x)) && !/[Ͱ-Ͽ]/.test(x) ? upper(x) : '.' + upper(x));
     else if (e.t === 'character') out.push(/^[A-Z0-9 ().'’-]+$/.test(upper(x)) && /[A-Z]/.test(upper(x)) ? upper(x) : '@' + upper(x));
     else if (e.t === 'transition') out.push(/TO:$/.test(upper(x)) && !/[Ͱ-Ͽ]/.test(x) ? upper(x) : '> ' + upper(x));
     else if (e.t === 'paren') out.push(/^\(.*\)$/.test(x.trim()) ? x.trim() : `(${x.trim()})`);
     else if (e.t === 'shot') out.push('!' + upper(x));
+    else if (e.t === 'act'){ if (i) out.push('===', ''); out.push(`>${upper(x)}<`); }
+    else if (e.t === 'endact') out.push(`>${upper(x)}<`);
+    else if (e.t === 'lyric') out.push(...x.split('\n').map((l) => '~' + l));
+    else if (['sound', 'music', 'page', 'panel', 'caption'].includes(e.t)) out.push('!' + upper(x));
+    else if (e.t === 'video' || e.t === 'audio') out.push(`!${e.t.toUpperCase()}: ${x}`);
     else if (e.t === 'action' && (isUpperLine(x) || SCENE_START.test(x))) out.push('!' + x);
     else out.push(x);
   });

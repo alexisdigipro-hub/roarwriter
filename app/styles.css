@@ -234,6 +234,31 @@ html[data-desktop=win32] .top{padding-right:150px}
 .share .seg button{height:28px;padding:0 11px;font-size:12.5px}
 body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,body.rw-readonly .ai textarea,body.rw-readonly .ai .btn.primary{display:none!important}
 @media (max-width:600px){ .share-add{grid-template-columns:1fr} .share-row{flex-wrap:wrap} .share-row .seg{order:5;margin-left:42px} }
+/* formats: the new script's choice, and the kinds only some formats have */
+.fmt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;max-height:min(70vh,640px);overflow:auto;padding:2px}
+.fmt-tile{display:flex;flex-direction:column;gap:6px;text-align:left;padding:12px;border-radius:16px;border:1px solid var(--line);background:var(--panel2);transition:border-color .2s,transform .2s var(--ease)}
+.fmt-tile:hover{border-color:rgba(255,107,44,.55);transform:translateY(-2px)}
+.fmt-tile b{font-size:14.5px} .fmt-tile small{color:var(--muted);font-size:12px;line-height:1.4}
+.fmt-mini{display:flex;flex-direction:column;gap:5px;height:118px;padding:12px 14px;border-radius:8px;background:#fbfaf7;overflow:hidden;margin-bottom:4px}
+.fmt-mini i{display:block;height:5px;border-radius:3px;background:#c9c6bf;flex:none}
+.fmt-mini .m-scene,.fmt-mini .m-page,.fmt-mini .m-panel{background:#55524c} .fmt-mini .m-act{background:#e0431b;align-self:center}
+.fmt-mini .m-character{margin-left:38%;background:#8a8780} .fmt-mini .m-dialogue{margin-left:18%;max-width:60%}
+.fmt-mini[data-fmt=stage] .m-character,.fmt-mini[data-fmt=musical] .m-character{margin-left:0;align-self:center} .fmt-mini[data-fmt=stage] .m-dialogue,.fmt-mini[data-fmt=musical] .m-dialogue{margin-left:0;max-width:100%}
+.fmt-mini[data-fmt=stage] .m-scene,.fmt-mini[data-fmt=musical] .m-scene{align-self:center} .fmt-mini .m-action{max-width:100%} .fmt-mini[data-fmt=stage] .m-action,.fmt-mini[data-fmt=musical] .m-action{margin-left:34%;max-width:66%;background:#b7b4ad}
+.fmt-mini .m-lyric{margin-left:18%;background:#e0431b;opacity:.55} .fmt-mini .m-sound,.fmt-mini .m-music,.fmt-mini .m-caption{background:#2f6fdc;opacity:.6}
+.fmt-mini[data-fmt=audio] .m-character{margin-left:0} .fmt-mini[data-fmt=audio] .m-dialogue{margin-left:26%}
+.fmt-mini[data-fmt=comic] .m-character{margin-left:16%} .fmt-mini[data-fmt=comic] .m-dialogue{margin-left:32%} .fmt-mini[data-fmt=comic] .m-caption{margin-left:16%}
+.fmt-mini .m-av{display:grid;grid-template-columns:1fr 1fr;gap:8px} .fmt-mini .m-av i{max-width:100%} .fmt-mini .m-video{background:#55524c} .fmt-mini .m-audio{background:#2f6fdc;opacity:.6}
+.chip.fmt{color:var(--text);background:rgba(255,255,255,.1)}
+.script p[data-t=act]:first-child,.script p[data-t=page]:first-child{margin-top:0}
+.script p[data-t=endact]:has(> br:only-child)::before{content:'end of act'}
+.script p[data-t=lyric]:has(> br:only-child)::before{content:'lyrics'}
+.script p[data-t=sound]:has(> br:only-child)::before{content:'sound (sfx)'}
+.paper[data-fmt=stage] .script p[data-t=action]:has(> br:only-child)::before,.paper[data-fmt=musical] .script p[data-t=action]:has(> br:only-child)::before{content:'stage direction'}
+.paper[data-fmt=comic] .script p[data-t=action]:has(> br:only-child)::before{content:'panel description'}
+.paper[data-fmt=av] .script p[data-t=scene]:has(> br:only-child)::before{content:'section'}
+@media (max-width:600px){ .fmt-grid{grid-template-columns:1fr 1fr;max-height:none} .fmt-mini{height:90px} .fmt-tile small{display:none} }
+
 /* only on narrow screens: the scenes button, the kinds bar, the phone's menu and the line under the title */
 .narrow-only,.phone-only,.kindbar,.side-close,.title-sub,.tag-btn{display:none}
 .title-box{display:contents}
