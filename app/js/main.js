@@ -87,52 +87,100 @@ function viewSignIn(mode = 'in'){
 }
 
 /* ---------- the library: every script ---------- */
-let libSearch = '';
+/* Alex, 25 Oct ("smarter, handier, fresher, more 2026"): one top row with every control; the script being written
+   first, big, to go straight back to it; new scripts one click away in their format; then every script as a
+   small page showing how it really begins, filtered (all, mine, shared) and sorted (recent, A to Z) */
+let libSearch = '', libWho = 'all', libSort = 'recent';
+const FMT_DOT = { film: '#ff6b2c', tv: '#4a90e2', multicam: '#f2c230', stage: '#c77dff', musical: '#f48fb1', audio: '#5cb85c', av: '#38bdf8', comic: '#fa8072' };
+// the first lines of a script, as its page begins (the title page when there is nothing written yet)
+function peekOf(s, big = false){
+  const lines = (s.meta?.peek || []).slice(0, big ? 12 : 8);
+  if (!lines.length) return h('div', { class: 'pk pk-tp' }, h('b', {}, upper(s.title || 'Untitled')), h('span', {}, s.meta?.author ? `by ${s.meta.author}` : ''));
+  return h('div', { class: 'pk' }, ...lines.map(([t, x]) => h('p', { 'data-t': t }, ['scene', 'character', 'transition', 'shot', 'act', 'endact', 'page', 'panel'].includes(t) ? upper(x) : x)));
+}
+const pagesOf = (s) => `${s.meta?.pages || 1} ${s.meta?.pages === 1 ? 'page' : 'pages'}`;
+const fmtChip = (s) => { const k = s.meta?.format || 'film'; return h('span', { class: 'chip dot', style: `--d:${FMT_DOT[k] || FMT_DOT.film}` }, FORMATS[k]?.label || 'Feature Film'); };
 async function viewLibrary(){
   document.title = 'RoarWriter';
   const user = currentUser();
-  const grid = h('div', { class: 'grid' }, h('p', { class: 'muted' }, 'Loading…'));
-  const search = h('label', { class: 'pill-search' }, h('span', { html: I.search }), h('input', { type: 'search', placeholder: 'Search', value: libSearch, oninput: (e) => { libSearch = e.target.value; draw(); } }));
+  const main = h('main', { class: 'lib' }, h('p', { class: 'muted' }, 'Loading…'));
+  const seg = (value, opts, on) => { const el = h('div', { class: 'seg' }, ...opts.map(([k, l]) => h('button', { type: 'button', class: value === k ? 'on' : '', onclick: (e) => { [...el.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); on(k); } }, l))); return el; };
+  const who = seg(libWho, [['all', 'All'], ['mine', 'Mine'], ['shared', 'Shared']], (k) => { libWho = k; draw(); });
+  const sort = seg(libSort, [['recent', 'Recent'], ['az', 'A–Z']], (k) => { libSort = k; draw(); });
+  who.classList.add('wide-only'); sort.classList.add('wide-only');
+  const search = h('label', { class: 'pill-search' }, h('span', { html: I.search }), h('input', { type: 'search', placeholder: 'Search scripts', value: libSearch, oninput: (e) => { libSearch = e.target.value; draw(); } }));
   app.replaceChildren(
-    h('header', { class: 'top' },
+    h('header', { class: 'top lib-top' },
       wordmark(),
       h('h1', { class: 'top-title' }, 'Scripts'),
-      search,
+      who, h('div', { class: 'spacer' }), search, sort,
       h('button', { class: 'btn', onclick: importScript }, h('span', { html: I.import }), h('span', { class: 'lbl' }, 'Import')),
       h('button', { class: 'btn primary', onclick: () => pickFormat() }, h('span', { html: I.plus }), h('span', { class: 'lbl' }, 'New script')),
       h('button', { class: 'ib', title: user.email, 'aria-label': 'Account', html: I.user, onclick: account })),
-    h('main', { class: 'lib' }, grid));
+    main);
   let list = [];
+  const open = (s) => { location.hash = '#s/' + s.id; };
+  const shared = (s) => s.role && s.role !== 'owner';
+  const acts = (s) => h('div', { class: 'tile-acts' },
+    h('button', { class: 'ib glass', title: 'Duplicate', 'aria-label': 'Duplicate', html: I.dup, onclick: async (e) => { e.stopPropagation(); const d = await store.open(s.id); if (d){ d.title = (d.title || 'Untitled') + ' (copy)'; d.titlePage.title = d.title; await newScript(d, false); list = await store.list(); draw(); toast('Duplicated'); } } }),
+    shared(s) ? h('button', { class: 'ib glass danger', title: 'Leave', 'aria-label': 'Leave', html: I.leave, onclick: async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Leave “${s.title || 'Untitled'}”? It will go from your scripts; ${s.owner_name || 'its owner'} can share it again.`)) return;
+      try { await removeShare(s.id, currentUser().email.toLowerCase()); store.forget(s.id); list = list.filter((x) => x.id !== s.id); draw(); } catch (err) { toast(err.message || 'Could not leave it now.'); }
+    } }) : h('button', { class: 'ib glass danger', title: 'Delete', 'aria-label': 'Delete', html: I.trash, onclick: async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete “${s.title || 'Untitled'}”? This cannot be undone.`)) return;
+      try { await store.remove(s.id); } catch { toast('Deleted here; it will go from the account when the connection is back.'); }
+      list = list.filter((x) => x.id !== s.id); draw();
+    } }));
+  const sharedChip = (s) => (shared(s) ? h('span', { class: 'chip shared' }, h('span', { html: I.people }), s.owner_name ? `by ${s.owner_name}` : 'Shared', s.role === 'view' ? ' · view' : '') : null);
+  // the one being written: big, with how far it has come
+  const hero = (s) => h('section', { class: 'hero', tabindex: 0, onclick: () => open(s), onkeydown: (e) => { if (e.key === 'Enter') open(s); } },
+    h('div', { class: 'hero-page' }, peekOf(s, true)),
+    h('div', { class: 'hero-body' },
+      h('span', { class: 'kicker' }, 'Continue writing'),
+      h('h2', {}, s.title || 'Untitled'),
+      h('div', { class: 'chips' }, fmtChip(s), sharedChip(s), h('span', { class: 'chip quiet' }, `edited ${ago(s.updated_at)}`)),
+      h('div', { class: 'hero-stats' },
+        h('div', {}, h('b', {}, String(s.meta?.pages || 1)), h('span', {}, s.meta?.pages === 1 ? 'page' : 'pages')),
+        h('div', {}, h('b', {}, String(s.meta?.scenes || 0)), h('span', {}, s.meta?.scenes === 1 ? 'scene' : 'scenes')),
+        h('div', {}, h('b', {}, `~${s.meta?.pages || 1}′`), h('span', {}, 'on screen')),
+        s.meta?.words ? h('div', {}, h('b', {}, s.meta.words.toLocaleString()), h('span', {}, 'words')) : null),
+      h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: (e) => { e.stopPropagation(); open(s); } }, h('span', { html: I.edit }), 'Open'))),
+    acts(s));
+  // a new script in a click: the formats used most, the rest one step further
+  const starts = () => h('section', { class: 'starts' },
+    h('span', { class: 'kicker' }, 'Start a new one'),
+    ...['film', 'tv', 'stage'].map((k) => h('button', { type: 'button', class: 'start', onclick: () => newScript(null, true, k) },
+      h('span', { class: 'fmt-mini', 'data-fmt': k, 'aria-hidden': 'true' }, ...miniOf(k)),
+      h('span', { class: 'start-t' }, h('b', {}, FORMATS[k].label), h('small', {}, k === 'film' ? 'Feature or short' : k === 'tv' ? 'An episode, in acts' : 'Theatre, acts and scenes')))),
+    h('div', { class: 'start-row' },
+      h('button', { type: 'button', class: 'btn', onclick: () => pickFormat() }, h('span', { html: I.cards }), 'Every format'),
+      h('button', { type: 'button', class: 'btn', onclick: importScript }, h('span', { html: I.import }), 'Import a file')),
+    h('small', { class: 'muted' }, 'Final Draft (.fdx), Fade In (.fadein) and Fountain come in as they are.'));
+  const tile = (s) => h('article', { class: 'tile', tabindex: 0, onclick: () => open(s), onkeydown: (e) => { if (e.key === 'Enter') open(s); } },
+    h('div', { class: 'tile-page' }, peekOf(s)),
+    h('div', { class: 'tile-body' },
+      h('div', { class: 'tile-title' }, s.title || 'Untitled'),
+      h('div', { class: 'tile-meta' }, h('i', { class: 'fdot', style: `--d:${FMT_DOT[s.meta?.format || 'film'] || FMT_DOT.film}`, title: FORMATS[s.meta?.format || 'film']?.label || '' }), `${pagesOf(s)} · ${ago(s.updated_at)}`),
+      sharedChip(s)),
+    acts(s));
   const draw = () => {
-    const w = libSearch.trim().toLowerCase();
-    const shown = list.filter((s) => !w || [s.title, s.meta?.author].join(' ').toLowerCase().includes(w));
     if (!list.length){
-      grid.replaceChildren(h('div', { class: 'empty' }, h('b', {}, 'Your first script'), h('span', {}, 'Start a new one, or bring one in from Final Draft (.fdx), Fade In (.fadein) or Fountain.'),
-        h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => pickFormat() }, 'New script'), h('button', { class: 'btn', onclick: importScript }, 'Import'))));
+      main.replaceChildren(h('div', { class: 'lib-first' }, h('div', { class: 'empty' }, h('b', {}, 'Your first script'), h('span', {}, 'Pick its format and start writing, or bring one in.')), starts()));
       return;
     }
-    grid.replaceChildren(...shown.map((s) => h('article', { class: 'tile', tabindex: 0, onclick: () => { location.hash = '#s/' + s.id; }, onkeydown: (e) => { if (e.key === 'Enter') location.hash = '#s/' + s.id; } },
-      h('div', { class: 'tile-page' }, h('b', {}, upper(s.title || 'Untitled')), h('span', {}, s.meta?.author ? `by ${s.meta.author}` : '')),
-      h('div', { class: 'tile-body' },
-        h('div', { class: 'tile-title' }, s.title || 'Untitled'),
-        h('div', { class: 'chips' },
-          s.meta?.format && s.meta.format !== 'film' ? h('span', { class: 'chip fmt' }, FORMATS[s.meta.format]?.label || '') : null,
-          h('span', { class: 'chip' }, `${s.meta?.pages || 1} ${s.meta?.pages === 1 ? 'page' : 'pages'}`),
-          h('span', { class: 'chip' }, `${s.meta?.scenes || 0} ${s.meta?.scenes === 1 ? 'scene' : 'scenes'}`),
-          s.role && s.role !== 'owner' ? h('span', { class: 'chip shared' }, h('span', { html: I.people }), s.owner_name ? `by ${s.owner_name}` : 'Shared', s.role === 'view' ? ' · view' : '') : null,
-          h('span', { class: 'chip quiet' }, ago(s.updated_at)))),
-      h('div', { class: 'tile-acts' },
-        h('button', { class: 'ib glass', title: 'Duplicate', 'aria-label': 'Duplicate', html: I.dup, onclick: async (e) => { e.stopPropagation(); const d = await store.open(s.id); if (d){ d.title = (d.title || 'Untitled') + ' (copy)'; d.titlePage.title = d.title; await newScript(d, false); draw(list = await store.list()); toast('Duplicated'); } } }),
-        s.role && s.role !== 'owner' ? h('button', { class: 'ib glass danger', title: 'Leave', 'aria-label': 'Leave', html: I.leave, onclick: async (e) => {
-          e.stopPropagation();
-          if (!confirm(`Leave “${s.title || 'Untitled'}”? It will go from your scripts; ${s.owner_name || 'its owner'} can share it again.`)) return;
-          try { await removeShare(s.id, currentUser().email.toLowerCase()); store.forget(s.id); list = list.filter((x) => x.id !== s.id); draw(); } catch (err) { toast(err.message || 'Could not leave it now.'); }
-        } }) : h('button', { class: 'ib glass danger', title: 'Delete', 'aria-label': 'Delete', html: I.trash, onclick: async (e) => {
-          e.stopPropagation();
-          if (!confirm(`Delete “${s.title || 'Untitled'}”? This cannot be undone.`)) return;
-          try { await store.remove(s.id); } catch { toast('Deleted here; it will go from the account when the connection is back.'); }
-          list = list.filter((x) => x.id !== s.id); draw();
-        } })))));
+    const w = fold(libSearch.trim());
+    let shown = list.filter((s) => (!w || fold([s.title, s.meta?.author].join(' ')).includes(w)) && (libWho === 'all' || (libWho === 'shared') === shared(s)));
+    if (libSort === 'az') shown = [...shown].sort((a, b) => (a.title || 'Untitled').localeCompare(b.title || 'Untitled', 'el'));
+    const latest = list[0];
+    const top = !w && libWho === 'all' && libSort === 'recent';
+    main.replaceChildren(
+      top ? h('div', { class: 'lib-head' }, hero(latest), starts()) : null,
+      h('div', { class: 'lib-sec' }, h('h3', {}, top ? 'All scripts' : w ? 'Found' : libWho === 'shared' ? 'Shared with you' : libWho === 'mine' ? 'Yours' : 'All scripts'), h('span', { class: 'chip' }, String(top ? shown.length - 1 : shown.length))),
+      (top ? shown.slice(1) : shown).length
+        ? h('div', { class: 'grid' }, ...(top ? shown.slice(1) : shown).map(tile))
+        : h('p', { class: 'muted lib-none' }, top ? 'Your other scripts appear here.' : 'No script here.'));
   };
   list = await store.list();
   draw();
@@ -327,19 +375,20 @@ async function viewScript(id){
     h('button', { class: 'ib', type: 'button', title: 'Redo', 'aria-label': 'Redo', html: I.redo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doRedo() }));
 
   const mid = h('div', { class: 'mid' }, desk);
-  app.replaceChildren(bar, h('div', { class: 'work' }, sidePanel, mid, aiPanel), kindBar);
+  const work = h('div', { class: 'work' }, sidePanel, mid, aiPanel);
+  work.append(resizer(work, 'l'), resizer(work, 'r'));
+  app.replaceChildren(bar, work, kindBar);
 
   let sideT = 0;
   editor = new Editor(paper, script, {
-    onChange: () => { save(); showPages(); clearTimeout(sideT); sideT = setTimeout(drawSide, 250); repaint(); },
+    // Typewriter: the line being written stays in the middle of the window (while typing; a click leaves the page where it is)
+    onChange: () => { if (pref('typewriter')){ const p = editor?.current(); if (p) requestAnimationFrame(() => p.scrollIntoView({ block: 'center' })); } save(); showPages(); clearTimeout(sideT); sideT = setTimeout(drawSide, 250); repaint(); },
     onCaret: ({ type, id: eid }) => {
       typeBtn.querySelector('.type-l').textContent = labelOf(script, type);
       kinds.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === type));
       const on = kinds.querySelector('.on');
       if (on && kinds.clientWidth && (on.offsetLeft < kinds.scrollLeft || on.offsetLeft + on.offsetWidth > kinds.scrollLeft + kinds.clientWidth)) kinds.scrollLeft = on.offsetLeft - (kinds.clientWidth - on.offsetWidth) / 2;
       if (eid !== caretId){ caretId = eid; clearTimeout(sideT); sideT = setTimeout(drawSide, 120); here(); }
-      // Typewriter: the line being written stays in the middle of the window
-      if (pref('typewriter')){ const p = editor?.current(); if (p) requestAnimationFrame(() => p.scrollIntoView({ block: 'center' })); }
     },
   });
   /* what the tools around the page need (tools.js) */
@@ -347,13 +396,14 @@ async function viewScript(id){
     script, editor: () => editor, save, zoom,
     setEls: (els) => { editor.setEls(els); editor.commit(true); },
     goTo: (id, page) => goTo(id, page),
-    redecorate: () => { paper.dataset.sn = script.settings.sceneNumbers || 'off'; markPages(); here(); },
+    redecorate: () => { paper.dataset.sn = script.settings.sceneNumbers || 'off'; paper.dataset.names = script.settings.names || 'fd'; markPages(); here(); },
     setFormat: (k) => setFormat(k), setPage: (k) => setPage(k), titlePage: () => titlePage(),
     me: () => currentUser()?.user_metadata?.name || currentUser()?.email || '',
     readOnly: () => role === 'view',
     notesChanged: () => { notes.place(); if (side === 'notes') drawSide(); },
   };
   paper.dataset.sn = script.settings.sceneNumbers || 'off';
+  paper.dataset.names = script.settings.names || 'fd';
   const finder = findBar(ctx, mid);
   const notes = notesLayer(ctx, paper);
   const cards = cardsView(ctx);
@@ -535,7 +585,7 @@ async function viewScript(id){
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
-    const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...kindsOf(script).map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (DESKTOP && navigator.platform.includes('Mac') ? '⌘' : navigator.platform.includes('Mac') ? '⌃' : 'Ctrl ') + n))),
+    const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...kindsOf(script).map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (navigator.platform.includes('Mac') ? '⌥' : 'Alt+') + n))),
       h('p', { class: 'menu-hint' }, 'Enter goes on to what usually comes next. Tab changes the kind.'));
     showMenu(menu);
   }
@@ -761,6 +811,31 @@ function pageZoom(paper, desk){
     label: () => `${Math.round(z * 100)}%`,
     off: () => {},
   };
+}
+
+/* The side (scenes, characters, notes) and the AI are as wide as they are dragged by their edge (Alex, 25 Oct),
+   kept per device; a double click on the edge puts them back */
+function resizer(work, which){
+  const key = which === 'l' ? 'side-w' : 'ai-w', [min, max] = which === 'l' ? [170, 520] : [280, 760];
+  try { const v = +localStorage.getItem('rw_' + key); if (v) work.style.setProperty('--' + key, v + 'px'); } catch {}
+  const grip = h('div', { class: 'rsz ' + which, title: 'Drag to make it wider', 'aria-hidden': 'true' });
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); grip.setPointerCapture(e.pointerId); grip.classList.add('on'); document.body.classList.add('rsz-drag');
+    let w = 0;
+    const move = (ev) => {
+      const r = work.getBoundingClientRect();
+      w = Math.round(Math.min(max, Math.max(min, which === 'l' ? ev.clientX - r.left : r.right - ev.clientX)));
+      work.style.setProperty('--' + key, w + 'px');
+    };
+    const up = () => {
+      grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
+      grip.classList.remove('on'); document.body.classList.remove('rsz-drag');
+      if (w) try { localStorage.setItem('rw_' + key, String(w)); } catch {}
+    };
+    grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+  });
+  grip.addEventListener('dblclick', () => { work.style.removeProperty('--' + key); try { localStorage.removeItem('rw_' + key); } catch {} });
+  return grip;
 }
 
 // short names for the kinds on the phone's bar

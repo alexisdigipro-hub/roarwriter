@@ -14,7 +14,7 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
   in localStorage at once and sends it a second later; offline edits wait and are sent when back online.
 - **The script**: `{ title, titlePage, settings: { page: 'a4'|'letter' }, els: [{ id, t, x }] }`, t one of scene, action,
   character, paren, dialogue, transition, shot (app/js/model.js). Editor: app/js/editor.js (Enter/Tab as Final Draft,
-  Cmd/Ctrl+1..7, suggestions, own undo). Fountain: fountain.js; Final Draft .fdx: fdx.js; PDF: print.js (pages laid out
+  Option/Alt+1..9 everywhere and Cmd/Ctrl+1..9 where it gets through, suggestions, own undo; dead keys (Greek tonos) are left alone while composing, Alex 25 Oct). Fountain: fountain.js; Final Draft .fdx: fdx.js; PDF: print.js (pages laid out
   and measured in the page; Electron printToPDF, a browser prints).
 - **AI**: Edge Function `supabase/functions/roarwriter-ai` (Claude, model claude-opus-5-5, server-side fallbacks). The key is the
   function's secret ANTHROPIC_API_KEY, set by Alex in Supabase > Edge Functions > Secrets; never in the repo or the app.

@@ -32,7 +32,12 @@ export class Editor {
     this.render(script.els);
     this.snapshot(true);
     this.box.addEventListener('keydown', (e) => this.key(e));
-    this.box.addEventListener('input', () => this.changed());
+    /* a tonos or a dieresis is a dead key: the letter is composed by the keyboard, and the line must not be
+       touched until it is (Alex, 25 Oct: in Safari the caret jumped to the line above, the letter with it) */
+    this.composing = false;
+    this.box.addEventListener('compositionstart', () => { this.composing = true; this.hidePop(); });
+    this.box.addEventListener('compositionend', () => { this.composing = false; setTimeout(() => { if (!this.composing) this.changed(); }, 0); });
+    this.box.addEventListener('input', (e) => { if (e.isComposing || this.composing) return; this.changed(); });
     // a phone's keyboard may not send Enter as a key (Android): its new paragraph arrives as an input instead
     this.box.addEventListener('beforeinput', (e) => { if (e.inputType === 'insertParagraph'){ e.preventDefault(); const pick = !this.pop.hidden && this.pop.querySelector('.on'); pick ? this.accept(pick.dataset.v) : this.enter(); } });
     this.box.addEventListener('paste', (e) => this.paste(e));
@@ -178,6 +183,8 @@ export class Editor {
 
   /* ---------- keys ---------- */
   key(e){
+    // keys pressed while a letter is being composed (a dead key) belong to the keyboard
+    if (e.isComposing || this.composing || e.keyCode === 229) return;
     const mod = e.metaKey || e.ctrlKey;
     if (!this.pop.hidden){
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); this.movePop(e.key === 'ArrowDown' ? 1 : -1); return; }
@@ -187,6 +194,9 @@ export class Editor {
     // Cmd or Ctrl and a number picks the kind, as in Final Draft (by the key's place, so a Greek keyboard works too);
     // a browser keeps Cmd+1..9 for its tabs, so there Ctrl+1..7 does it
     const digit = (e.code || '').match(/^(?:Digit|Numpad)([0-9])$/)?.[1] ?? (/^[0-9]$/.test(e.key) ? e.key : null);
+    // Option (Alt) and a number everywhere (Alex, 25 Oct: a browser on a Mac keeps Cmd+1 for its tabs, and the Mac
+    // Ctrl+1 for its desktops); Cmd/Ctrl and a number too, where it gets through (the Mac and Windows app)
+    if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && digit != null){ const k = kindsOf(this.script).find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
     if (mod && !e.altKey && !e.shiftKey && digit != null){ const k = kindsOf(this.script).find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
     if (mod && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); return; }
     if (mod && e.key === 'y'){ e.preventDefault(); this.doRedo(); return; }
