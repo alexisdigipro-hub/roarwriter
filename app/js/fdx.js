@@ -15,9 +15,10 @@ export function toFdx(script){
   }).join('\n');
   const tp = script.titlePage || {};
   const title = [
-    p('Text', upper(tp.title || script.title || ''), 'Center'), p('Text', '', 'Center'),
+    p('Text', upper(tp.title || script.title || ''), 'Center'), ...(tp.episode ? [p('Text', tp.episode, 'Center')] : []), p('Text', '', 'Center'),
     p('Text', tp.credit || 'Written by', 'Center'), p('Text', tp.author || '', 'Center'),
     ...(tp.draftDate ? [p('Text', '', 'Center'), p('Text', tp.draftDate, 'Center')] : []),
+    ...(tp.copyright ? [p('Text', tp.copyright, 'Left')] : []),
     ...(tp.contact ? tp.contact.split('\n').map((l) => p('Text', l, 'Left')) : []),
   ].join('\n');
   return `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
