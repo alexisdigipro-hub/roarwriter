@@ -167,6 +167,8 @@ async function newScript(data, open = true, format = 'film'){
   const s = normalize(data || blankScript('Untitled'));
   if (!data){
     s.titlePage.author = currentUser()?.user_metadata?.name || '';
+    // no title yet: the bar and the title page show what goes there, instead of the word Untitled itself
+    s.title = ''; s.titlePage.title = '';
     s.settings.format = format;
     s.els = startOf(format).map(([t, x]) => ({ id: crypto.randomUUID().slice(0, 8), t, x }));
   }
@@ -200,6 +202,8 @@ async function viewScript(id){
   if (!script){ toast('This script is not here.'); location.hash = ''; return; }
   document.title = (script.title || 'Untitled') + ' · RoarWriter';
   script.tags = normalizeTags(script.tags);
+  // older scripts kept the word Untitled as their title: it goes, so the title page shows TITLE to type over
+  if (script.title === 'Untitled' && script.titlePage.title === 'Untitled'){ script.title = ''; script.titlePage.title = ''; }
   // Collaborate: 'owner', 'edit' or 'view' (read only: nothing is changed or sent)
   let role = store.roleOf(id);
   myRole(id).then((r) => { if (r !== role){ role = r; applyRole(); } });
@@ -388,7 +392,16 @@ async function viewScript(id){
   }
   const offPref = onPref((k) => { if (k === 'focus') here(); if (k === 'breaks') markPages(); });
   let paintT = 0;
-  function repaint(){ clearTimeout(paintT); paintT = setTimeout(() => editor && paintTags(editor.box, script.tags), 120); markPages(); }
+  function repaint(){
+    clearTimeout(paintT);
+    paintT = setTimeout(() => {
+      if (!editor) return;
+      paintTags(editor.box, script.tags);
+      // Greek capitals without accents as soon as the script is Greek (a new one is not, when it opens)
+      desk.lang = isGreek([script.titlePage.title, ...script.els.map((e) => e.x)].join(' ')) ? 'el' : 'en';
+    }, 120);
+    markPages();
+  }
   /* the pages, as the PDF lays them out (Alex, 24 Oct: "it does not show me the second page"): where a page
      starts the page gets a gap like the edge between two sheets, with the page's number */
   const breaks = h('div', { class: 'pb-layer', 'aria-hidden': 'true' });

@@ -126,7 +126,7 @@ export function findBar(ctx, host){
     ctx.setEls(els);
   }
   function one(){ const hit = hits[at]; if (!hit) return; apply([hit]); const keep = at; hits = search(); at = Math.min(keep, hits.length - 1); show(); }
-  function all(){ if (!hits.length) return; const n = hits.length; apply(hits); run(); toast(`Replaced ${n}`); }
+  function all(){ if (!hits.length) return; const n = hits.length; apply(hits); run(); toast(`Replaced ${n}`, { action: 'Undo', fn: () => { ctx.editor().doUndo(); run(); } }); }
   function close(){ bar.hidden = true; if (window.CSS?.highlights){ CSS.highlights.delete('rw-find'); CSS.highlights.delete('rw-find-on'); } }
   return {
     open(replace = false){ bar.hidden = false; bar.classList.toggle('with-rep', replace || bar.classList.contains('with-rep')); const sel = getSelection().toString().trim(); if (sel && !sel.includes('\n')) q.value = sel; q.focus(); q.select(); run(); },
