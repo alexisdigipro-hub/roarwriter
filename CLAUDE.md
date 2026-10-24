@@ -19,7 +19,7 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
 - **AI**: Edge Function `supabase/functions/roarwriter-ai` (Claude, model claude-opus-5-5, server-side fallbacks). The key is the
   function's secret ANTHROPIC_API_KEY, set by Alex in Supabase > Edge Functions > Secrets; never in the repo or the app.
 - **Look**: RoarMe's dark glass, round glass buttons, pill fields, soft tiles, orange accent (#ff6b2c), the page white
-  in Courier Prime (Greek falls back to Courier New).
+  in Cousine (a Courier with Greek, so both languages have the same weight; Courier Prime had no Greek).
 - **Releases**: pushing to main updates the web version (.github/workflows/web.yml, which also checks the code).
   The desktop installers come from a tag `vX.Y.Z` (.github/workflows/desktop.yml): bump `version` in package.json, tag,
   push; the release's files are the download links and what the app's updater (electron/updater.js) looks at.

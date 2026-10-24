@@ -4,7 +4,8 @@
   --acc:#ff6b2c; --acc-ink:#fff; --glass:rgba(255,255,255,.06); --edge:rgba(255,255,255,.13); --field:rgba(0,0,0,.24);
   --lit:inset 0 1px 0 rgba(255,255,255,.07), 0 24px 60px rgba(0,0,0,.3); --ease:cubic-bezier(.16,1,.3,1);
   --ui:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
-  --mono:"Courier Prime","Courier New",Courier,monospace;
+  /* Cousine: a Courier with Greek in it, so Greek and English are the same weight (Courier Prime had no Greek) */
+  --mono:Cousine,"Courier New",Courier,monospace;
   color-scheme:dark;
 }
 *{box-sizing:border-box}

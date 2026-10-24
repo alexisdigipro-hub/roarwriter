@@ -48,7 +48,9 @@ export function createStore(uid){
         }
         const sent = row.data, rev = row.rev;
         // the time sent is replaced by the server's own (supabase/roarwriter.sql), which is what the copies compare
-        const at = await saveScript({ id, title: row.title, meta: row.meta, data: sent, updated_at: new Date().toISOString() });
+        let at = await saveScript({ id, title: row.title, meta: row.meta, data: sent, updated_at: new Date().toISOString() });
+        // the account's own time for what was just sent (so the open script is not taken for someone else's change)
+        if (!at) at = await getStamp(id).catch(() => null);
         const now = local(id);
         if (at){ setBase(id, sent, at); if (now) write(k(uid, 's:' + id), { ...now, updated_at: now.rev === rev ? at : now.updated_at }); }
         // what was written while it was being sent goes in the next send
