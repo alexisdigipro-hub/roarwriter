@@ -31,6 +31,8 @@ export class Editor {
     this.snapshot(true);
     this.box.addEventListener('keydown', (e) => this.key(e));
     this.box.addEventListener('input', () => this.changed());
+    // a phone's keyboard may not send Enter as a key (Android): its new paragraph arrives as an input instead
+    this.box.addEventListener('beforeinput', (e) => { if (e.inputType === 'insertParagraph'){ e.preventDefault(); const pick = !this.pop.hidden && this.pop.querySelector('.on'); pick ? this.accept(pick.dataset.v) : this.enter(); } });
     this.box.addEventListener('paste', (e) => this.paste(e));
     this.box.addEventListener('focus', () => this.caret());
     this.box.addEventListener('blur', () => setTimeout(() => this.hidePop(), 150));

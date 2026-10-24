@@ -110,7 +110,7 @@ async function viewLibrary(){
         h('div', { class: 'tile-title' }, s.title || 'Untitled'),
         h('div', { class: 'chips' },
           h('span', { class: 'chip' }, `${s.meta?.pages || 1} ${s.meta?.pages === 1 ? 'page' : 'pages'}`),
-          h('span', { class: 'chip' }, `${s.meta?.scenes || 0} scenes`),
+          h('span', { class: 'chip' }, `${s.meta?.scenes || 0} ${s.meta?.scenes === 1 ? 'scene' : 'scenes'}`),
           h('span', { class: 'chip quiet' }, ago(s.updated_at)))),
       h('div', { class: 'tile-acts' },
         h('button', { class: 'ib glass', title: 'Duplicate', 'aria-label': 'Duplicate', html: I.dup, onclick: async (e) => { e.stopPropagation(); const d = await store.open(s.id); if (d){ d.title = (d.title || 'Untitled') + ' (copy)'; d.titlePage.title = d.title; await newScript(d, false); draw(list = await store.list()); toast('Duplicated'); } } }),
@@ -165,7 +165,9 @@ async function viewScript(id){
   document.title = (script.title || 'Untitled') + ' · RoarWriter';
 
   const saveState = h('span', { class: 'save' }, 'Saved');
-  store.onState((s) => { saveState.textContent = s === 'saving' ? 'Saving…' : s === 'offline' ? 'Saved on this computer' : 'Saved'; saveState.dataset.s = s; });
+  // on a phone the pages and Saved sit under the title (.title-sub); the bar's own ones are hidden there
+  const pagesSub = h('span', {}, '1 page'), saveSub = h('span', { class: 'save' }, 'Saved');
+  store.onState((s) => { for (const e of [saveState, saveSub]){ e.textContent = s === 'saving' ? 'Saving…' : s === 'offline' ? (e === saveSub ? 'Saved here' : 'Saved on this computer') : 'Saved'; e.dataset.s = s; } });
   const save = () => store.save(id, script);
 
   // the bar: back, the title, the kind of element, pages, exports, AI
@@ -173,27 +175,37 @@ async function viewScript(id){
   const typeBtn = h('button', { class: 'btn type-btn', type: 'button', onclick: () => typeMenu() }, h('span', { class: 'type-l' }, 'Action'), h('span', { html: I.down }));
   const pages = h('span', { class: 'chip' }, '1 page');
   const aiBtn = h('button', { class: 'btn', type: 'button', onclick: () => toggleAI() }, h('span', { html: I.spark }), h('span', { class: 'lbl' }, 'AI'));
-  const exportBtn = h('button', { class: 'btn', type: 'button', onclick: () => exportMenu() }, h('span', { html: I.export }), h('span', { class: 'lbl' }, 'Export'));
+  const exportBtn = h('button', { class: 'btn wide-only', type: 'button', onclick: () => exportMenu() }, h('span', { html: I.export }), h('span', { class: 'lbl' }, 'Export'));
+  // narrow screens only: the scenes and characters (the side is hidden there), and on a phone one menu for the
+  // title page and the exports
+  const scenesBtn = h('button', { class: 'btn narrow-only', type: 'button', title: 'Scenes and characters', 'aria-label': 'Scenes and characters', onclick: () => openSide() }, h('span', { html: I.scenes }));
+  const moreBtn = h('button', { class: 'btn phone-only', type: 'button', title: 'More', 'aria-label': 'More', onclick: () => moreMenu() }, h('span', { html: I.more }));
   const bar = h('header', { class: 'top edit-top' },
     h('a', { class: 'ib', href: '#', title: 'All scripts', 'aria-label': 'All scripts', html: I.back }),
-    titleIn, typeBtn, pages, h('div', { class: 'spacer' }), saveState,
-    h('button', { class: 'btn', type: 'button', onclick: () => titlePage() }, h('span', { html: I.page }), h('span', { class: 'lbl' }, 'Title page')),
-    exportBtn, aiBtn);
+    h('div', { class: 'title-box' }, titleIn, h('div', { class: 'title-sub' }, pagesSub, ' · ', saveSub)),
+    typeBtn, pages, h('div', { class: 'spacer' }), saveState,
+    h('button', { class: 'btn wide-only', type: 'button', onclick: () => titlePage() }, h('span', { html: I.page }), h('span', { class: 'lbl' }, 'Title page')),
+    exportBtn, scenesBtn, aiBtn, moreBtn);
 
   // the side: scenes and characters
   let side = 'scenes';
   const sideList = h('div', { class: 'side-list' });
   const sideSeg = h('div', { class: 'seg' }, ...[['scenes', 'Scenes'], ['chars', 'Characters']].map(([k, l]) => h('button', { type: 'button', class: k === side ? 'on' : '', onclick: (e) => { side = k; [...sideSeg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); drawSide(); } }, l)));
-  const sidePanel = h('aside', { class: 'side' }, sideSeg, sideList);
+  const sideClose = h('button', { class: 'ib side-close', type: 'button', title: 'Close', 'aria-label': 'Close', html: I.x, onclick: () => closeSide() });
+  const sidePanel = h('aside', { class: 'side' }, h('div', { class: 'side-head' }, sideSeg, sideClose), sideList);
+  // on a narrow screen the side opens over the page; a tap on a scene or a character closes it and goes there
+  const openSide = () => { drawSide(); sidePanel.classList.add('open'); };
+  const closeSide = () => sidePanel.classList.remove('open');
+  const goTo = (eid) => { closeSide(); editor.focusEl(eid, 0); };
   let caretId = '';
   const drawSide = () => {
     if (side === 'scenes'){
       const sc = scenesOf(script.els);
       const at = (() => { const i = script.els.findIndex((e) => e.id === caretId); let n = -1; sc.forEach((s, k) => { if (s.i <= i) n = k; }); return n; })();
-      sideList.replaceChildren(...(sc.length ? sc.map((s, k) => h('button', { type: 'button', class: 'srow' + (k === at ? ' on' : ''), onclick: () => editor.focusEl(s.id, 0) }, h('span', { class: 'sn' }, String(s.n)), h('span', { class: 'st' }, s.text))) : [h('p', { class: 'muted small' }, 'Scenes appear here as you write scene headings (INT. / EXT. / ΕΣΩΤ. / ΕΞΩΤ.).')]));
+      sideList.replaceChildren(...(sc.length ? sc.map((s, k) => h('button', { type: 'button', class: 'srow' + (k === at ? ' on' : ''), onclick: () => goTo(s.id) }, h('span', { class: 'sn' }, String(s.n)), h('span', { class: 'st' }, s.text))) : [h('p', { class: 'muted small' }, 'Scenes appear here as you write scene headings (INT. / EXT. / ΕΣΩΤ. / ΕΞΩΤ.).')]));
     } else {
       const cs = charactersOf(script.els);
-      sideList.replaceChildren(...(cs.length ? cs.map((c) => h('button', { type: 'button', class: 'crow', onclick: () => editor.focusEl(script.els[c.first].id, 0) }, h('span', { class: 'cn' }, c.name), h('span', { class: 'cc' }, `${c.lines} lines · ${c.scenes} sc.`))) : [h('p', { class: 'muted small' }, 'Characters appear here once they speak.')]));
+      sideList.replaceChildren(...(cs.length ? cs.map((c) => h('button', { type: 'button', class: 'crow', onclick: () => goTo(script.els[c.first].id) }, h('span', { class: 'cn' }, c.name), h('span', { class: 'cc' }, `${c.lines} lines · ${c.scenes} sc.`))) : [h('p', { class: 'muted small' }, 'Characters appear here once they speak.')]));
     }
   };
 
@@ -204,14 +216,29 @@ async function viewScript(id){
   // the AI
   const aiPanel = h('aside', { class: 'ai', hidden: true });
 
-  app.replaceChildren(bar, h('div', { class: 'work' }, sidePanel, desk, aiPanel));
+  // phones and tablets: the kinds of line over the keyboard (there is no Tab there), with undo and redo
+  const kinds = h('div', { class: 'kinds-in' }, ...TYPES.map(([k, l]) => h('button', { type: 'button', 'data-k': k, onmousedown: (e) => e.preventDefault(), onclick: () => editor.setCurrentType(k) }, SHORT[k] || l)));
+  const kindBar = h('div', { class: 'kindbar' },
+    h('button', { class: 'ib', type: 'button', title: 'Undo', 'aria-label': 'Undo', html: I.undo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doUndo() }),
+    kinds,
+    h('button', { class: 'ib', type: 'button', title: 'Redo', 'aria-label': 'Redo', html: I.redo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doRedo() }));
+
+  app.replaceChildren(bar, h('div', { class: 'work' }, sidePanel, desk, aiPanel), kindBar);
 
   let sideT = 0;
   editor = new Editor(paper, script, {
-    onChange: () => { save(); pages.textContent = `${pageCount(script.els)} ${pageCount(script.els) === 1 ? 'page' : 'pages'}`; clearTimeout(sideT); sideT = setTimeout(drawSide, 250); },
-    onCaret: ({ type, id: eid }) => { typeBtn.querySelector('.type-l').textContent = LABEL[type] || 'Action'; if (eid !== caretId){ caretId = eid; clearTimeout(sideT); sideT = setTimeout(drawSide, 120); } },
+    onChange: () => { save(); showPages(); clearTimeout(sideT); sideT = setTimeout(drawSide, 250); },
+    onCaret: ({ type, id: eid }) => {
+      typeBtn.querySelector('.type-l').textContent = LABEL[type] || 'Action';
+      kinds.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === type));
+      const on = kinds.querySelector('.on');
+      if (on && kinds.clientWidth && (on.offsetLeft < kinds.scrollLeft || on.offsetLeft + on.offsetWidth > kinds.scrollLeft + kinds.clientWidth)) kinds.scrollLeft = on.offsetLeft - (kinds.clientWidth - on.offsetWidth) / 2;
+      if (eid !== caretId){ caretId = eid; clearTimeout(sideT); sideT = setTimeout(drawSide, 120); }
+    },
   });
-  pages.textContent = `${pageCount(script.els)} ${pageCount(script.els) === 1 ? 'page' : 'pages'}`;
+  function showPages(){ const n = pageCount(script.els); pages.textContent = pagesSub.textContent = `${n} ${n === 1 ? 'page' : 'pages'}`; }
+  showPages();
+  const offKeyboard = followKeyboard(kindBar);
   drawSide();
   const first = script.els[script.els.length - 1];
   editor.focusEl(first.id, first.x.length);
@@ -227,7 +254,7 @@ async function viewScript(id){
     if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
-  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); editor?.destroy(); editor = null; await store.flush(); };
+  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); editor?.destroy(); editor = null; await store.flush(); };
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
@@ -241,6 +268,15 @@ async function viewScript(id){
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'PDF'), h('kbd', {}, 'to send or print')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fdx'); } }, h('span', {}, 'Final Draft'), h('kbd', {}, '.fdx')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fountain'); } }, h('span', {}, 'Fountain'), h('kbd', {}, '.fountain')));
+    showMenu(menu);
+  }
+  function moreMenu(){
+    const r = moreBtn.getBoundingClientRect();
+    const menu = h('div', { class: 'menu', style: `right:${Math.max(8, innerWidth - r.right)}px;top:${r.bottom + 6}px` },
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); titlePage(); } }, h('span', {}, 'Title page'), h('kbd', {}, 'title, author, page size')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'Export PDF'), h('kbd', {}, 'to send or print')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fdx'); } }, h('span', {}, 'Save as Final Draft'), h('kbd', {}, '.fdx')),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fountain'); } }, h('span', {}, 'Save as Fountain'), h('kbd', {}, '.fountain')));
     showMenu(menu);
   }
   async function pdf(){ try { await exportPDF(script); } catch (e) { toast(e.message || 'The PDF could not be made.'); } }
@@ -268,6 +304,7 @@ async function viewScript(id){
   }
   let aiBusy = false;
   function toggleAI(){
+    closeSide();
     aiPanel.hidden = !aiPanel.hidden;
     if (!aiPanel.hidden) drawAI();
   }
@@ -316,9 +353,43 @@ async function viewScript(id){
   }
 }
 
+// short names for the kinds on the phone's bar
+const SHORT = { scene: 'Scene', paren: '(Paren)' };
+
+/* The kinds bar stays on the keyboard: a phone's keyboard covers the bottom of the window without making it any
+   smaller, so the bar is lifted by what the visible part (visualViewport) leaves out, and the line being written
+   is scrolled up when it would go under the bar. */
+function followKeyboard(bar){
+  const vv = window.visualViewport;
+  if (!vv) return () => {};
+  let raf = 0;
+  const place = () => {
+    raf = 0;
+    const lift = Math.max(0, innerHeight - vv.height - vv.offsetTop);
+    bar.style.transform = lift ? `translateY(${-lift}px)` : '';
+    bar.classList.toggle('kb', lift > 80);
+    if (getComputedStyle(bar).display === 'none') return;
+    const s = getSelection();
+    if (!s.rangeCount || !document.activeElement?.classList.contains('script')) return;
+    const r = s.getRangeAt(0).getClientRects()[0] || s.anchorNode?.parentElement?.getBoundingClientRect?.();
+    if (!r) return;
+    const bottom = vv.offsetTop + vv.height - bar.offsetHeight - 12;
+    if (r.bottom > bottom) window.scrollBy(0, r.bottom - bottom);
+  };
+  const ask = () => { if (!raf) raf = requestAnimationFrame(place); };
+  vv.addEventListener('resize', ask); vv.addEventListener('scroll', ask);
+  document.addEventListener('selectionchange', ask);
+  document.addEventListener('input', ask);
+  ask();
+  return () => { vv.removeEventListener('resize', ask); vv.removeEventListener('scroll', ask); document.removeEventListener('selectionchange', ask); document.removeEventListener('input', ask); };
+}
+
 function showMenu(menu){
   document.querySelectorAll('.menu').forEach((m) => m.remove());
   document.body.append(menu);
+  // kept on the screen (a phone is narrow)
+  const r = menu.getBoundingClientRect();
+  if (r.right > innerWidth - 8){ menu.style.left = `${Math.max(8, innerWidth - 8 - r.width)}px`; menu.style.right = 'auto'; }
   const off = (e) => { if (!menu.contains(e.target)){ menu.remove(); document.removeEventListener('mousedown', off); } };
   setTimeout(() => document.addEventListener('mousedown', off), 0);
 }
