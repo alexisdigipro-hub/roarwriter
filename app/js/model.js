@@ -38,7 +38,7 @@ export function blankScript(title = 'Untitled'){
   return {
     v: 1,
     title,
-    titlePage: { title, credit: 'Written by', author: '', contact: '', draftDate: '' },
+    titlePage: { title, episode: '', credit: 'Written by', author: '', copyright: '', draftDate: '', contact: '' },
     settings: { page: 'a4' },
     els: [el('scene', '')],
   };
@@ -51,6 +51,7 @@ export function normalize(d){
   s.els = (Array.isArray(d?.els) && d.els.length ? d.els : blankScript().els)
     .filter((e) => e && LABEL[e.t]).map((e) => ({ id: e.id || uid(), t: e.t, x: String(e.x ?? '') }));
   if (!s.els.length) s.els = blankScript().els;
+  s.tags = Array.isArray(d?.tags) ? d.tags : [];
   return s;
 }
 

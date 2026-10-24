@@ -122,6 +122,19 @@ html[data-desktop=win32] .top{padding-right:150px}
 .script p[data-t=transition],.ai-preview p[data-t=transition]{text-align:right;text-transform:uppercase}
 .script p[data-t=shot],.ai-preview p[data-t=shot]{text-transform:uppercase}
 .script::selection,.script *::selection{background:rgba(255,107,44,.28)}
+/* the title page, on the page (as the PDF prints it) */
+.desk{flex-direction:column;align-items:center;justify-content:flex-start;gap:28px}
+.tp-paper{display:flex;flex-direction:column;font:12pt/12pt var(--mono);color:#111;height:11.69in}
+.tp-paper.letter{height:11in}
+.tp-mid{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:1.6in}
+.tp-low{margin-top:auto;display:flex;flex-direction:column;gap:12pt;width:60%}
+.tpf{min-width:2ch;max-width:100%;outline:none;white-space:pre-wrap;word-wrap:break-word;border-radius:3px;caret-color:#e0431b}
+.tpf:empty::before{content:attr(data-ph);color:rgba(0,0,0,.25)}
+.tpf:hover{background:rgba(0,0,0,.035)} .tpf:focus{background:rgba(255,107,44,.08)}
+.tp-title{text-transform:uppercase;text-decoration:underline}
+.tp-ep{margin-top:12pt;text-decoration:underline}
+.tp-by{margin-top:48pt}
+.tp-mid .tpf + .tpf:not(.tp-ep):not(.tp-by){margin-top:12pt}
 /* the empty element says what it is, faintly */
 .script p:has(> br:only-child)::before{content:attr(data-t);position:absolute;color:rgba(0,0,0,.18);font:italic 10pt var(--ui);text-transform:capitalize;pointer-events:none}
 .script p[data-t=paren]:has(> br:only-child)::before{content:'parenthetical'}
@@ -158,8 +171,43 @@ html[data-desktop=win32] .top{padding-right:150px}
 .toast{position:fixed;left:50%;bottom:24px;z-index:99;transform:translate(-50%,20px);opacity:0;padding:10px 16px;border-radius:999px;background:rgba(40,44,52,.96);border:1px solid var(--edge);font-size:13.5px;transition:.25s var(--ease);pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 
+/* breakdown: the tags lit on the page, each category its colour (breakdown.js paintTags) */
+::highlight(rw-cast){background-color:#e5484d38;text-decoration:underline 2px #e5484d}
+::highlight(rw-extras){background-color:#30a46c38;text-decoration:underline 2px #30a46c}
+::highlight(rw-props){background-color:#8e4ec638;text-decoration:underline 2px #8e4ec6}
+::highlight(rw-locations){background-color:#0091ff38;text-decoration:underline 2px #0091ff}
+::highlight(rw-wardrobe){background-color:#f76b1538;text-decoration:underline 2px #f76b15}
+::highlight(rw-makeup){background-color:#d6409f38;text-decoration:underline 2px #d6409f}
+::highlight(rw-vehicles){background-color:#12a59438;text-decoration:underline 2px #12a594}
+::highlight(rw-animals){background-color:#a1807238;text-decoration:underline 2px #a18072}
+::highlight(rw-sfx){background-color:#ffb22438;text-decoration:underline 2px #ffb224}
+::highlight(rw-stunts){background-color:#e5466638;text-decoration:underline 2px #e54666}
+::highlight(rw-sound){background-color:#3e63dd38;text-decoration:underline 2px #3e63dd}
+::highlight(rw-set){background-color:#7c66dc38;text-decoration:underline 2px #7c66dc}
+.bd-dot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none}
+.menu .bd-cats{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.menu .bd-cats button{justify-content:flex-start;gap:9px;padding:8px 10px;font-size:13px}
+.menu-title{margin:6px 10px 4px;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu-title b{color:var(--text);text-transform:none;letter-spacing:0}
+.bd{display:flex;flex-direction:column;gap:12px}
+.bd-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bd-list{display:flex;flex-direction:column;gap:10px;max-height:min(64vh,640px);overflow:auto;padding-right:2px}
+.bd-scene{padding:12px 14px;border-radius:16px;background:var(--panel2);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.bd-scene-h{display:flex;align-items:baseline;gap:10px;cursor:pointer;background:none;border:0;padding:0;text-align:left}
+.bd-scene-h .sn{font-size:15px}
+.bd-scene-h .st{font-size:13px;-webkit-line-clamp:3}
+.bd-scene-h small{margin-left:auto;color:var(--muted);font-size:11.5px;white-space:nowrap}
+.bd-row{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.bd-row > span:first-child{flex:none;width:118px;display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;font-weight:600;padding-top:3px}
+.bd-items{display:flex;flex-wrap:wrap;gap:5px}
+.bd-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:12.5px;background:color-mix(in srgb,var(--c) 18%,transparent);border:1px solid color-mix(in srgb,var(--c) 40%,transparent)}
+.bd-chip i{font-style:normal;color:var(--muted);font-size:11px}
+.bd-chip button{border:0;background:none;padding:0;color:var(--muted);font-size:14px;line-height:1}
+.bd-empty{color:var(--muted);font-size:13px;line-height:1.55}
+@media (max-width:600px){ .bd-row{flex-direction:column;gap:5px} .bd-row > span:first-child{width:auto} .bd-list{max-height:none} .menu .bd-cats button{padding:11px 10px;font-size:14px} }
+
 /* only on narrow screens: the scenes button, the kinds bar, the phone's menu and the line under the title */
-.narrow-only,.phone-only,.kindbar,.side-close,.title-sub{display:none}
+.narrow-only,.phone-only,.kindbar,.side-close,.title-sub,.tag-btn{display:none}
 .title-box{display:contents}
 
 /* narrower windows and phones (the web version) */
@@ -178,6 +226,9 @@ html[data-desktop=win32] .top{padding-right:150px}
   /* the page fills the width, the text at a size to read and write (the PDF keeps the real page) */
   .paper,.paper.letter{width:auto;max-width:8.27in;min-height:calc(100dvh - 190px);margin:0 auto;padding:44px 8% 70px 11%;border-radius:10px}
   /* the letters follow the zoom (pinch on the page, or ⋯ > Zoom); the lines wrap again, the page never scrolls sideways */
+  .desk > .paper + .paper{margin-top:16px}
+  .tp-paper,.tp-paper.letter{height:auto;min-height:0;aspect-ratio:8.27/11.69;font-size:calc(12pt * var(--z,1))}
+  .tp-mid{margin-top:22%}
   .script{min-height:50dvh;font-size:calc(12pt * var(--z,1));line-height:1}
   .script p[data-t=character]{margin-left:37%} .script p[data-t=paren]{margin-left:27%;width:38%} .script p[data-t=dialogue]{margin-left:17%;width:58%}
 
@@ -197,6 +248,7 @@ html[data-desktop=win32] .top{padding-right:150px}
   .kindbar{display:flex;align-items:center;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:30;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(26,28,34,.92);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-top:1px solid var(--line);will-change:transform}
   .kindbar.kb{padding-bottom:8px}
   .kindbar .ib{width:38px;height:38px}
+  .kindbar.sel .tag-btn{display:inline-flex;flex:none;height:38px;width:auto!important;padding:0 14px!important;border-radius:999px}
   .kinds-in{position:relative;flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
   .kinds-in::-webkit-scrollbar{display:none}
   .kinds-in{-webkit-mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent);mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent);padding:0 6px}
@@ -204,6 +256,7 @@ html[data-desktop=win32] .top{padding-right:150px}
   .kinds-in button.on{color:var(--text);background:linear-gradient(180deg,rgba(255,107,44,.42),rgba(255,107,44,.2));border-color:rgba(255,107,44,.6);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
 
   .menu{max-width:calc(100vw - 16px)}
+  .toast{bottom:calc(74px + env(safe-area-inset-bottom))}
   .menu button{padding:12px 14px;font-size:15px}
   .menu .zoom-row{display:flex;align-items:center;gap:8px;padding:6px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
   .menu .zoom-row > span{flex:1;font-size:15px;padding-left:6px}
@@ -228,6 +281,8 @@ html[data-desktop=win32] .top{padding-right:150px}
   .desk{padding:8px 8px calc(96px + env(safe-area-inset-bottom))}
   .paper,.paper.letter{padding:26px 18px 60px 22px;border-radius:12px;min-height:calc(100dvh - 160px)}
   .script{font-size:calc(15px * var(--z,1));line-height:1.3}
+  .tp-paper,.tp-paper.letter{font-size:calc(14px * var(--z,1));line-height:1.3;aspect-ratio:auto;min-height:calc(100dvh - 160px)}
+  .tp-low{width:100%}
   .script p,.ai-preview p{margin-top:1.1em}
   .script p[data-t=scene]{margin-top:2em}
   .script p[data-t=character]{margin-left:30%} .script p[data-t=paren]{margin-left:20%;width:62%} .script p[data-t=dialogue]{margin-left:9%;width:84%}

@@ -12,7 +12,7 @@ export function parseFountain(text){
   const src = String(text || '').replace(/\r\n?/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\[\[[\s\S]*?\]\]/g, '');
   let lines = src.split('\n');
   // title page: Key: value lines at the very top, up to the first blank line
-  if (/^(title|credit|author|authors|source|draft date|date|contact|copyright|notes)\s*:/i.test(lines[0] || '')){
+  if (/^(title|episode|credit|author|authors|source|draft date|date|contact|copyright|notes)\s*:/i.test(lines[0] || '')){
     let i = 0, key = '';
     const tp = {};
     for (; i < lines.length && lines[i].trim() !== ''; i++){
@@ -20,7 +20,7 @@ export function parseFountain(text){
       if (m){ key = m[1].trim().toLowerCase(); tp[key] = m[2].trim(); }
       else if (key) tp[key] = (tp[key] ? tp[key] + '\n' : '') + lines[i].trim();
     }
-    s.titlePage = { title: tp.title || '', credit: tp.credit || 'Written by', author: tp.author || tp.authors || '', contact: tp.contact || '', draftDate: tp['draft date'] || '' };
+    s.titlePage = { title: tp.title || '', episode: tp.episode || '', credit: tp.credit || 'Written by', author: tp.author || tp.authors || '', copyright: tp.copyright || '', contact: tp.contact || '', draftDate: tp['draft date'] || '' };
     s.title = s.titlePage.title.split('\n')[0] || '';
     lines = lines.slice(i + 1);
   }
@@ -72,8 +72,10 @@ export function toFountain(script, { titlePage = true } = {}){
   const tp = script.titlePage || {};
   if (titlePage && (tp.title || tp.author)){
     if (tp.title) out.push(`Title: ${tp.title}`);
+    if (tp.episode) out.push(`Episode: ${tp.episode}`);
     if (tp.credit) out.push(`Credit: ${tp.credit}`);
     if (tp.author) out.push(`Author: ${tp.author}`);
+    if (tp.copyright) out.push(`Copyright: ${tp.copyright}`);
     if (tp.draftDate) out.push(`Draft date: ${tp.draftDate}`);
     if (tp.contact) out.push(`Contact:\n${tp.contact.split('\n').map((l) => '    ' + l).join('\n')}`);
     out.push('');

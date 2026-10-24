@@ -23,9 +23,11 @@ export const PRINT_CSS = `
 .rwprint .p.transition{text-align:right;text-transform:uppercase}
 .rwprint .p.shot{text-transform:uppercase}
 .rwprint .tp{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:2.6in}
-.rwprint .tp h1{font:inherit;text-transform:uppercase;margin:0 0 24pt;text-decoration:underline}
-.rwprint .tp p{margin:0 0 12pt;white-space:pre-wrap}
-.rwprint .tp-foot{position:absolute;left:1.5in;right:1in;bottom:1in;display:flex;justify-content:space-between;white-space:pre-wrap;text-align:left}
+.rwprint .tp h1{font:inherit;text-transform:uppercase;margin:0;text-decoration:underline}
+.rwprint .tp .ep{margin:12pt 0 0;text-decoration:underline}
+.rwprint .tp .by{margin:48pt 0 0}
+.rwprint .tp p{margin:12pt 0 0;white-space:pre-wrap}
+.rwprint .tp-foot{position:absolute;left:1.5in;right:1in;bottom:1in;display:flex;flex-direction:column;gap:12pt;white-space:pre-wrap;text-align:left}
 @page{size:auto;margin:0}
 @media print{html,body{margin:0;background:#fff}}
 `;
@@ -94,9 +96,12 @@ export function printHTML(script, { titlePage = true } = {}){
   const letter = script.settings?.page === 'letter';
   const pages = paginate(script);
   const tp = script.titlePage || {};
+  // the title page as Final Draft lays it out: title and episode underlined, the credit and the author, and at
+  // the foot on the left the copyright, the draft and the contact
+  const foot = [tp.copyright, tp.draftDate, tp.contact].filter((x) => String(x || '').trim());
   const title = titlePage && (tp.title || tp.author) ? `<section class="pg"><div class="tp">
-    <h1>${esc(tp.title || script.title)}</h1><p>${esc(tp.credit || 'Written by')}</p><p>${esc(tp.author)}</p></div>
-    <div class="tp-foot"><span>${esc(tp.contact)}</span><span>${esc(tp.draftDate)}</span></div></section>` : '';
+    <h1>${esc(tp.title || script.title)}</h1>${tp.episode ? `<p class="ep">${esc(tp.episode)}</p>` : ''}<p class="by">${esc(tp.credit || 'Written by')}</p><p>${esc(tp.author)}</p></div>
+    ${foot.length ? `<div class="tp-foot">${foot.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}</section>` : '';
   const body = pages.map((els, i) => `<section class="pg">${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}">${esc(shown(e)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(script.title || 'Script')}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap">

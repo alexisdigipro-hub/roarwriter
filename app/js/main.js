@@ -5,6 +5,7 @@ import { Editor } from './editor.js';
 import { fountainToEls, parseFountain, toFountain } from './fountain.js';
 import { parseFdx, toFdx } from './fdx.js';
 import { exportPDF } from './print.js';
+import { CAT, CATS, breakdownCSV, breakdownOf, clearPaint, findIn, fold, normalizeTags, paintTags } from './breakdown.js';
 import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
 
 /* RoarWriter (The Mad Lions Lab, Oct 2026): write screenplays in the industry format, in English or Greek, on a
@@ -163,6 +164,7 @@ async function viewScript(id){
   const script = await store.open(id);
   if (!script){ toast('This script is not here.'); location.hash = ''; return; }
   document.title = (script.title || 'Untitled') + ' · RoarWriter';
+  script.tags = normalizeTags(script.tags);
 
   const saveState = h('span', { class: 'save' }, 'Saved');
   // on a phone the pages and Saved sit under the title (.title-sub); the bar's own ones are hidden there
@@ -171,7 +173,7 @@ async function viewScript(id){
   const save = () => store.save(id, script);
 
   // the bar: back, the title, the kind of element, pages, exports, AI
-  const titleIn = h('input', { class: 'title-in', value: script.title || '', placeholder: 'Untitled', 'aria-label': 'Title', oninput: (e) => { script.title = e.target.value; script.titlePage.title = e.target.value; document.title = (script.title || 'Untitled') + ' · RoarWriter'; save(); } });
+  const titleIn = h('input', { class: 'title-in', value: script.title || '', placeholder: 'Untitled', 'aria-label': 'Title', oninput: (e) => { script.title = e.target.value; script.titlePage.title = e.target.value; document.title = (script.title || 'Untitled') + ' · RoarWriter'; tpTitle.textContent = e.target.value; save(); } });
   const typeBtn = h('button', { class: 'btn type-btn', type: 'button', onclick: () => typeMenu() }, h('span', { class: 'type-l' }, 'Action'), h('span', { html: I.down }));
   const pages = h('span', { class: 'chip' }, '1 page');
   const aiBtn = h('button', { class: 'btn', type: 'button', onclick: () => toggleAI() }, h('span', { html: I.spark }), h('span', { class: 'lbl' }, 'AI'));
@@ -184,6 +186,7 @@ async function viewScript(id){
     h('a', { class: 'ib', href: '#', title: 'All scripts', 'aria-label': 'All scripts', html: I.back }),
     h('div', { class: 'title-box' }, titleIn, h('div', { class: 'title-sub' }, pagesSub, ' · ', saveSub)),
     typeBtn, pages, h('div', { class: 'spacer' }), saveState,
+    h('button', { class: 'btn wide-only', type: 'button', onclick: () => showBreakdown() }, h('span', { html: I.tag }), h('span', { class: 'lbl' }, 'Breakdown')),
     h('button', { class: 'btn wide-only', type: 'button', onclick: () => titlePage() }, h('span', { html: I.page }), h('span', { class: 'lbl' }, 'Title page')),
     exportBtn, scenesBtn, aiBtn, moreBtn);
 
@@ -211,7 +214,38 @@ async function viewScript(id){
 
   // the page
   const paper = h('div', { class: 'paper' + (script.settings.page === 'letter' ? ' letter' : '') });
-  const desk = h('div', { class: 'desk' }, paper);
+  /* the title page, written on the page itself as Final Draft lays it out (Alex, 24 Oct): the title and the
+     episode underlined in the middle, the credit and the author under them, the copyright, the draft and the
+     contact at the foot on the left. An empty line shows what goes there, and does not print. */
+  const tp = script.titlePage;
+  const tpField = (k, ph, { multi = false, cls = '' } = {}) => {
+    const f = h('div', { class: 'tpf ' + cls, 'data-k': k, 'data-ph': ph, spellcheck: 'true' });
+    try { f.contentEditable = 'plaintext-only'; } catch { f.contentEditable = 'true'; }
+    if (f.contentEditable !== 'plaintext-only') f.contentEditable = 'true';
+    f.textContent = tp[k] || '';
+    f.addEventListener('input', () => {
+      tp[k] = (multi ? f.innerText : f.textContent).replace(/\n$/, '');
+      if (!f.textContent) f.replaceChildren();
+      if (k === 'title'){ script.title = tp.title.split('\n')[0]; titleIn.value = script.title; document.title = (script.title || 'Untitled') + ' · RoarWriter'; }
+      save();
+    });
+    f.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || multi && !e.metaKey && !e.ctrlKey) return;
+      e.preventDefault();
+      const all = [...tpPaper.querySelectorAll('.tpf')], next = all[all.indexOf(f) + 1];
+      if (next) next.focus(); else editor.focusEl(script.els[0].id, 0);
+    });
+    f.addEventListener('paste', (e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); });
+    return f;
+  };
+  const tpTitle = tpField('title', 'TITLE', { cls: 'tp-title' });
+  const tpPaper = h('div', { class: 'paper tp-paper' + (script.settings.page === 'letter' ? ' letter' : '') },
+    h('div', { class: 'tp-mid' }, tpTitle, tpField('episode', 'Episode Title', { cls: 'tp-ep' }),
+      tpField('credit', 'Written by', { cls: 'tp-by' }), tpField('author', "Author's Name")),
+    h('div', { class: 'tp-low' }, tpField('copyright', 'Copyright (c)'), tpField('draftDate', 'First Draft'), tpField('contact', 'Contact information', { multi: true })));
+  const desk = h('div', { class: 'desk' }, tpPaper, paper);
+  // Greek capitals lose their accents (ΝΥΧΤΑ, not ΝΎΧΤΑ) when the page knows it is Greek
+  desk.lang = isGreek([tp.title, ...script.els.map((e) => e.x)].join(' ')) ? 'el' : 'en';
   const zoom = pageZoom(paper, desk);
 
   // the AI
@@ -219,7 +253,9 @@ async function viewScript(id){
 
   // phones and tablets: the kinds of line over the keyboard (there is no Tab there), with undo and redo
   const kinds = h('div', { class: 'kinds-in' }, ...TYPES.map(([k, l]) => h('button', { type: 'button', 'data-k': k, onmousedown: (e) => e.preventDefault(), onclick: () => editor.setCurrentType(k) }, SHORT[k] || l)));
+  const tagBtn = h('button', { class: 'btn primary tag-btn', type: 'button', onmousedown: (e) => e.preventDefault(), onclick: () => { const r = tagBtn.getBoundingClientRect(); tagMenu(r.left, r.top, true); } }, h('span', { html: I.tag }), 'Tag');
   const kindBar = h('div', { class: 'kindbar' },
+    tagBtn,
     h('button', { class: 'ib', type: 'button', title: 'Undo', 'aria-label': 'Undo', html: I.undo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doUndo() }),
     kinds,
     h('button', { class: 'ib', type: 'button', title: 'Redo', 'aria-label': 'Redo', html: I.redo, onmousedown: (e) => e.preventDefault(), onclick: () => editor.doRedo() }));
@@ -228,7 +264,7 @@ async function viewScript(id){
 
   let sideT = 0;
   editor = new Editor(paper, script, {
-    onChange: () => { save(); showPages(); clearTimeout(sideT); sideT = setTimeout(drawSide, 250); },
+    onChange: () => { save(); showPages(); clearTimeout(sideT); sideT = setTimeout(drawSide, 250); repaint(); },
     onCaret: ({ type, id: eid }) => {
       typeBtn.querySelector('.type-l').textContent = LABEL[type] || 'Action';
       kinds.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === type));
@@ -237,6 +273,17 @@ async function viewScript(id){
       if (eid !== caretId){ caretId = eid; clearTimeout(sideT); sideT = setTimeout(drawSide, 120); }
     },
   });
+  let paintT = 0;
+  function repaint(){ clearTimeout(paintT); paintT = setTimeout(() => editor && paintTags(editor.box, script.tags), 120); }
+  repaint();
+  // right click on a word or a selection: tag it for the breakdown (on a phone, select it and press Tag)
+  editor.box.addEventListener('contextmenu', (e) => {
+    if (!pickWord()) return;
+    e.preventDefault();
+    tagMenu(e.clientX, e.clientY);
+  });
+  const onSel = () => { const sel = getSelection(); kindBar.classList.toggle('sel', !!(sel.rangeCount && !sel.isCollapsed && editor?.box.contains(sel.anchorNode) && sel.toString().trim())); };
+  document.addEventListener('selectionchange', onSel);
   function showPages(){ const n = pageCount(script.els); pages.textContent = pagesSub.textContent = `${n} ${n === 1 ? 'page' : 'pages'}`; }
   showPages();
   const offKeyboard = followKeyboard(kindBar);
@@ -255,7 +302,7 @@ async function viewScript(id){
     if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
-  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); zoom.off(); editor?.destroy(); editor = null; await store.flush(); };
+  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); zoom.off(); document.removeEventListener('selectionchange', onSel); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
@@ -271,6 +318,65 @@ async function viewScript(id){
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fountain'); } }, h('span', {}, 'Fountain'), h('kbd', {}, '.fountain')));
     showMenu(menu);
   }
+  /* the word to tag: the selection (one line of it, without the punctuation at its ends), or a tag under the caret */
+  function pickWord(){
+    const sel = getSelection();
+    if (!sel.rangeCount || !editor.box.contains(sel.anchorNode)) return null;
+    const text = sel.toString().split('\n')[0].replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    if (text) return { text, tags: script.tags.filter((t) => fold(t.name) === fold(text)) };
+    const p = editor.current(); if (!p) return null;
+    const at = editor.offset(p), x = editor.textOf(p);
+    const tags = script.tags.filter((t) => findIn(x, t.name).some(([a, b]) => at >= a && at <= b));
+    return tags.length ? { text: tags[0].name, tags } : null;
+  }
+  function tagMenu(x, y, above = false){
+    const w = pickWord();
+    if (!w) return toast('Select a word or a phrase first.');
+    const add = (cat) => (e) => {
+      e.preventDefault(); menu.remove();
+      if (!script.tags.some((t) => t.cat === cat && fold(t.name) === fold(w.text))) script.tags.push({ id: crypto.randomUUID().slice(0, 8), cat, name: w.text });
+      save(); repaint(); getSelection().collapseToEnd();
+      toast(`${w.text} · ${CAT[cat].label}`);
+    };
+    const menu = h('div', { class: 'menu', style: `left:${x}px;top:${y}px` },
+      h('p', { class: 'menu-title' }, 'Tag ', h('b', {}, `“${w.text}”`)),
+      h('div', { class: 'bd-cats' }, ...CATS.map(([k, l, c]) => h('button', { type: 'button', onmousedown: add(k) }, h('i', { class: 'bd-dot', style: `background:${c}` }), h('span', {}, l)))),
+      ...w.tags.map((t) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); script.tags = script.tags.filter((x) => x.id !== t.id); save(); repaint(); toast('Tag removed'); } }, h('span', {}, `Remove from ${CAT[t.cat].label}`), h('i', { class: 'bd-dot', style: `background:${CAT[t.cat].color}` }))));
+    showMenu(menu);
+    // kept on the screen, above the finger on a phone
+    const r = menu.getBoundingClientRect();
+    if (above || r.bottom > innerHeight - 8) menu.style.top = `${Math.max(8, (above ? y - 8 : innerHeight - 8) - r.height)}px`;
+  }
+
+  /* the breakdown: by scene (where, when, who and what) or by element (each one with its scenes) */
+  let bdView = 'scene';
+  function showBreakdown(){
+    const body = h('div', { class: 'bd' });
+    const draw = () => {
+      const { rows, byEl } = breakdownOf(script);
+      const seg = h('div', { class: 'seg' }, ...[['scene', 'By scene'], ['el', 'By element']].map(([k, l]) => h('button', { type: 'button', class: bdView === k ? 'on' : '', onclick: () => { bdView = k; draw(); } }, l)));
+      const csv = h('button', { class: 'btn', type: 'button', onclick: () => download(`${(script.title || 'Untitled').replace(/[\\/:*?"<>|]+/g, ' ').trim()} breakdown.csv`, breakdownCSV(script), 'text/csv') }, h('span', { html: I.export }), 'CSV');
+      const chip = (cat, name, extra) => h('span', { class: 'bd-chip', style: `--c:${CAT[cat].color}` }, name, extra);
+      const tagged = (cat, name) => script.tags.find((t) => t.cat === cat && fold(t.name) === fold(name));
+      const hint = h('p', { class: 'bd-empty' }, 'The cast and the locations come from the script. Select a word on the page and right-click it (on a phone: select it and press Tag) to add props, wardrobe, vehicles and the rest.');
+      let list;
+      if (bdView === 'scene'){
+        list = h('div', { class: 'bd-list' }, ...rows.map((r) => h('div', { class: 'bd-scene' },
+          h('button', { class: 'bd-scene-h', type: 'button', onclick: () => { close(); if (r.id) goTo(r.id); } }, h('span', { class: 'sn' }, r.n ? String(r.n) : '·'), h('span', { class: 'st' }, r.heading || 'Before the first scene'), h('small', {}, [r.ie, r.time].filter(Boolean).join(' · '))),
+          ...CATS.filter(([c]) => r.items[c].length).map(([c, l, col]) => h('div', { class: 'bd-row' }, h('span', {}, h('i', { class: 'bd-dot', style: `background:${col}` }), l), h('div', { class: 'bd-items' }, ...r.items[c].map((n) => chip(c, n))))))));
+      } else {
+        list = h('div', { class: 'bd-list' }, ...CATS.filter(([c]) => byEl[c].length).map(([c, l, col]) => h('div', { class: 'bd-scene' },
+          h('div', { class: 'bd-row' }, h('span', {}, h('i', { class: 'bd-dot', style: `background:${col}` }), l), h('div', { class: 'bd-items' }, ...byEl[c].map((e) => {
+            const t = tagged(c, e.name);
+            return chip(c, e.name, [h('i', {}, `sc. ${e.scenes.filter(Boolean).join(', ') || '-'}`), t ? h('button', { type: 'button', title: 'Remove the tag', 'aria-label': 'Remove the tag', onclick: () => { script.tags = script.tags.filter((x) => x.id !== t.id); save(); repaint(); draw(); } }, '×') : null]);
+          }))))));
+      }
+      body.replaceChildren(h('div', { class: 'bd-top' }, seg, h('span', { class: 'spacer' }), csv), list, hint);
+    };
+    draw();
+    const close = modal('Breakdown', body, { wide: true });
+  }
+
   function moreMenu(){
     const r = moreBtn.getBoundingClientRect();
     const pct = h('b', {}, zoom.label());
@@ -279,6 +385,7 @@ async function viewScript(id){
       h('div', { class: 'zoom-row' }, h('span', {}, 'Zoom'),
         h('button', { class: 'ib', type: 'button', 'aria-label': 'Smaller', html: I.minus, onmousedown: step(-0.1) }), pct,
         h('button', { class: 'ib', type: 'button', 'aria-label': 'Bigger', html: I.plus, onmousedown: step(0.1) })),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); showBreakdown(); } }, h('span', {}, 'Breakdown'), h('kbd', {}, 'cast, locations, props')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); titlePage(); } }, h('span', {}, 'Title page'), h('kbd', {}, 'title, author, page size')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'Export PDF'), h('kbd', {}, 'to send or print')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fdx'); } }, h('span', {}, 'Save as Final Draft'), h('kbd', {}, '.fdx')),
@@ -295,9 +402,9 @@ async function viewScript(id){
   }
   function titlePage(){
     const tp = script.titlePage;
-    const f = (k, label, area) => h('label', { class: 'field' }, h('span', {}, label), h(area ? 'textarea' : 'input', { class: 'input', value: tp[k] || '', rows: area ? 3 : undefined, oninput: (e) => { tp[k] = e.target.value; if (k === 'title'){ script.title = e.target.value; titleIn.value = e.target.value; } save(); } }));
-    const page = h('div', { class: 'seg' }, ...[['a4', 'A4'], ['letter', 'US Letter']].map(([k, l]) => h('button', { type: 'button', class: script.settings.page === k ? 'on' : '', onclick: (e) => { script.settings.page = k; [...page.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); paper.classList.toggle('letter', k === 'letter'); save(); } }, l)));
-    modal('Title page', h('div', { class: 'stack' }, f('title', 'Title'), h('div', { class: 'row2' }, f('credit', 'Credit'), f('author', 'Author')), f('draftDate', 'Draft / date'), f('contact', 'Contact', true),
+    const f = (k, label, area) => h('label', { class: 'field' }, h('span', {}, label), h(area ? 'textarea' : 'input', { class: 'input', value: tp[k] || '', rows: area ? 3 : undefined, oninput: (e) => { tp[k] = e.target.value; if (k === 'title'){ script.title = e.target.value; titleIn.value = e.target.value; } const on = tpPaper.querySelector(`.tpf[data-k="${k}"]`); if (on) on.textContent = e.target.value; save(); } }));
+    const page = h('div', { class: 'seg' }, ...[['a4', 'A4'], ['letter', 'US Letter']].map(([k, l]) => h('button', { type: 'button', class: script.settings.page === k ? 'on' : '', onclick: (e) => { script.settings.page = k; [...page.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); paper.classList.toggle('letter', k === 'letter'); tpPaper.classList.toggle('letter', k === 'letter'); save(); } }, l)));
+    modal('Title page', h('div', { class: 'stack' }, f('title', 'Title'), f('episode', 'Episode'), h('div', { class: 'row2' }, f('credit', 'Credit'), f('author', 'Author')), h('div', { class: 'row2' }, f('copyright', 'Copyright'), f('draftDate', 'Draft / date')), f('contact', 'Contact', true),
       h('div', { class: 'field' }, h('span', {}, 'Page size'), page)));
   }
 
@@ -367,7 +474,7 @@ function pageZoom(paper, desk){
   try { z = Math.min(MAX, Math.max(MIN, +localStorage.getItem('rw_zoom') || 1)); } catch {}
   const set = (v, keep = true) => {
     z = Math.round(Math.min(MAX, Math.max(MIN, v)) * 100) / 100;
-    paper.style.setProperty('--z', z);
+    desk.style.setProperty('--z', z);
     if (keep) try { localStorage.setItem('rw_zoom', String(z)); } catch {}
   };
   set(z, false);

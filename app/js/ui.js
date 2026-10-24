@@ -59,6 +59,7 @@ const svg = (d, w = 2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentC
 export const I = {
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   back: svg('<path d="M15 18l-6-6 6-6"/>', 2.2),
+  tag: svg('<path d="M3 12V4a1 1 0 011-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.6"/>'),
   minus: svg('<path d="M5 12h14"/>', 2.4),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 2.4),
   search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
