@@ -129,7 +129,7 @@ html[data-desktop=win32] .top{padding-right:150px}
 .pb::before{content:'';position:absolute;left:-1px;right:-1px;top:calc(-.75in - 12pt - 14px);height:28px;background:var(--bg);box-shadow:inset 0 10px 14px -10px rgba(0,0,0,.45),inset 0 -10px 14px -10px rgba(0,0,0,.45)}
 .pb span{position:absolute;right:1in;top:calc(-.5in - 6pt);font:12pt var(--mono);color:#111}
 /* the title page, on the page (as the PDF prints it) */
-.desk{flex-direction:column;align-items:center;justify-content:flex-start;gap:28px}
+.desk{flex-direction:column;align-items:center;align-items:safe center;justify-content:flex-start;gap:28px}
 .tp-paper{display:flex;flex-direction:column;font:12pt/12pt var(--mono);color:#111;height:11.69in}
 .tp-paper.letter{height:11in}
 .tp-mid{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:1.6in}
@@ -144,6 +144,7 @@ html[data-desktop=win32] .top{padding-right:150px}
 /* the empty element says what it is, faintly */
 .script p:has(> br:only-child)::before{content:attr(data-t);position:absolute;color:rgba(0,0,0,.18);font:italic 10pt var(--ui);text-transform:capitalize;pointer-events:none}
 .script p[data-t=paren]:has(> br:only-child)::before{content:'parenthetical'}
+.script p[data-t=general]:has(> br:only-child)::before{content:'unformatted text'}
 .suggest{position:absolute;z-index:5;min-width:220px;max-width:420px;display:flex;flex-direction:column;padding:5px;border-radius:14px;background:rgba(30,33,39,.96);border:1px solid var(--edge);box-shadow:0 18px 40px rgba(0,0,0,.4)}
 .suggest[hidden]{display:none}
 .suggest button{text-align:left;border:0;background:none;padding:7px 10px;border-radius:9px;font:12.5px var(--mono);color:var(--text);text-transform:uppercase}
@@ -212,6 +213,26 @@ html[data-desktop=win32] .top{padding-right:150px}
 .bd-empty{color:var(--muted);font-size:13px;line-height:1.55}
 @media (max-width:600px){ .bd-row{flex-direction:column;gap:5px} .bd-row > span:first-child{width:auto} .bd-list{max-height:none} .menu .bd-cats button{padding:11px 10px;font-size:14px} }
 
+/* the zoom: on a computer the whole page grows (zoom), on a phone or tablet the letters do (and the lines wrap) */
+@media (min-width:861px){ .desk > .paper{zoom:var(--z,1)} }
+.zoom-pill{display:inline-flex;align-items:center;height:36px;padding:0 3px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);flex:none}
+.zoom-pill button{height:30px;min-width:30px;display:inline-grid;place-items:center;border:0;background:none;border-radius:999px;color:var(--text);padding:0}
+.zoom-pill button:hover{background:rgba(255,255,255,.1)}
+.zoom-pill svg{width:14px;height:14px}
+.zoom-pill .zp-v{min-width:50px;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums}
+/* Collaborate */
+.chip.shared{gap:5px;color:var(--text);background:rgba(255,107,44,.14)} .chip.shared svg{width:12px;height:12px}
+.chip[hidden]{display:none}
+.chip.ro{background:rgba(255,255,255,.1);color:var(--text)}
+.share-add{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+.share-list{display:flex;flex-direction:column;gap:6px}
+.share-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--panel2);border:1px solid var(--line)}
+.share-av{width:32px;height:32px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:800;background:rgba(255,255,255,.1)}
+.share-av.own{background:var(--acc);color:#fff}
+.share-who{flex:1;min-width:0;display:flex;flex-direction:column} .share-who b,.share-who small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .share-who small{color:var(--muted);font-size:12px}
+.share .seg button{height:28px;padding:0 11px;font-size:12.5px}
+body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,body.rw-readonly .ai textarea,body.rw-readonly .ai .btn.primary{display:none!important}
+@media (max-width:600px){ .share-add{grid-template-columns:1fr} .share-row{flex-wrap:wrap} .share-row .seg{order:5;margin-left:42px} }
 /* only on narrow screens: the scenes button, the kinds bar, the phone's menu and the line under the title */
 .narrow-only,.phone-only,.kindbar,.side-close,.title-sub,.tag-btn{display:none}
 .title-box{display:contents}

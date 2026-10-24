@@ -145,7 +145,10 @@ export class Editor {
       if (e.key === 'Enter' || e.key === 'Tab'){ const pick = this.pop.querySelector('.on'); if (pick){ e.preventDefault(); this.accept(pick.dataset.v); return; } }
       if (e.key === 'Escape'){ e.preventDefault(); this.hidePop(); return; }
     }
-    if (mod && !e.altKey && /^[1-7]$/.test(e.key)){ e.preventDefault(); this.setCurrentType(TYPES[+e.key - 1][0]); return; }
+    // Cmd or Ctrl and a number picks the kind, as in Final Draft (by the key's place, so a Greek keyboard works too);
+    // a browser keeps Cmd+1..9 for its tabs, so there Ctrl+1..7 does it
+    const digit = (e.code || '').match(/^(?:Digit|Numpad)([0-7])$/)?.[1] ?? (/^[0-7]$/.test(e.key) ? e.key : null);
+    if (mod && !e.altKey && !e.shiftKey && digit != null){ const k = TYPES.find((x) => x[2] === digit); if (k){ e.preventDefault(); this.setCurrentType(k[0]); return; } }
     if (mod && (e.key === 'z' || e.key === 'Z')){ e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); return; }
     if (mod && e.key === 'y'){ e.preventDefault(); this.doRedo(); return; }
     if (e.key === 'Tab'){ e.preventDefault(); const p = this.current(); if (p) this.setType(p, tabType(p.dataset.t, e.shiftKey)); return; }
@@ -226,6 +229,16 @@ export class Editor {
     const back = id && this.box.querySelector(`p[data-id="${CSS.escape(id)}"]`);
     if (back) this.place(back, this.textOf(back).length);
   }
+  // the script as someone else changed it (Collaborate): the page is redrawn and the caret stays where it was
+  setEls(els){
+    const p = this.current(), id = p?.dataset.id, at = p ? this.offset(p) : 0, had = document.activeElement === this.box;
+    this.render(els);
+    this.script.els = els;
+    this.snapshot(true);
+    const back = had && id && this.box.querySelector(`p[data-id="${CSS.escape(id)}"]`);
+    if (back) this.place(back, Math.min(at, this.textOf(back).length));
+  }
+  readOnly(on){ this.box.contentEditable = on ? 'false' : 'true'; }
   doUndo(){ if (this.undo.length < 2) return; this.redo.push(this.undo.pop()); this.restore(this.undo[this.undo.length - 1].state); }
   doRedo(){ const s = this.redo.pop(); if (!s) return; this.undo.push(s); this.restore(s.state); }
 

@@ -1,6 +1,6 @@
 /* RoarMe's Supabase (RoarWriter signs in with RoarMe accounts, like Roardino), spoken to with plain fetch so the
    app needs no library: Auth for the account, the roarwriter_scripts table for the scripts (row-level security:
-   each person sees only their own), and the Edge Function roarwriter-ai. The publishable key is public by design. */
+   the owner and the people it is shared with, roarwriter_shares), and the Edge Function roarwriter-ai. The publishable key is public by design. */
 export const SB_URL = 'https://bzmjhbnwhdwmncxkqkdl.supabase.co';
 export const SB_KEY = 'sb_publishable_7mQ3e0NH5lCmdoIKx2-FUA_EgCoXx9X';
 const KEY = 'roarwriter-auth';
@@ -62,11 +62,25 @@ export async function token(){
 
 const rest = async (path, opts = {}) => call('/rest/v1/' + path, { ...opts, token: await token() });
 
-// the scripts: the list without their text, one in full, a save (insert or update), a delete
-export const listScripts = () => rest('roarwriter_scripts?select=id,title,meta,updated_at&order=updated_at.desc');
-export const getScript = async (id) => (await rest(`roarwriter_scripts?id=eq.${encodeURIComponent(id)}&select=id,title,meta,data,updated_at`))[0] || null;
-export const saveScript = (row) => rest('roarwriter_scripts?on_conflict=id', { method: 'POST', body: row, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } });
-export const deleteScript = (id) => rest(`roarwriter_scripts?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+// the scripts: the list without their text (with who owns each and what the person may do), one in full, how
+// new it is, a save (insert or update; the server gives the time), a delete
+const q = (v) => encodeURIComponent(v);
+export async function listScripts(){
+  try { return await rest('rpc/roarwriter_list', { method: 'POST', body: {} }); }
+  catch (e) { if (e.status !== 404) throw e; } // before supabase/roarwriter.sql's Collaborate part is run
+  return (await rest('roarwriter_scripts?select=id,title,meta,updated_at&order=updated_at.desc')).map((r) => ({ ...r, role: 'owner', owner_name: '' }));
+}
+export const getScript = async (id) => (await rest(`roarwriter_scripts?id=eq.${q(id)}&select=id,title,meta,data,updated_at`))[0] || null;
+export const getStamp = async (id) => (await rest(`roarwriter_scripts?id=eq.${q(id)}&select=updated_at`))[0]?.updated_at || null;
+export const saveScript = async (row) => (await rest('roarwriter_scripts?on_conflict=id&select=updated_at', { method: 'POST', body: row, headers: { Prefer: 'resolution=merge-duplicates,return=representation' } }))?.[0]?.updated_at || null;
+export const deleteScript = (id) => rest(`roarwriter_scripts?id=eq.${q(id)}`, { method: 'DELETE' });
+
+// Collaborate: who a script is shared with (the owner sees everyone, the others only themselves)
+export async function myRole(id){ try { const r = await rest('rpc/roarwriter_role', { method: 'POST', body: { p_script: id } }); return ['owner', 'edit', 'view'].includes(r) ? r : 'owner'; } catch { return 'owner'; } }
+export const listShares = (id) => rest(`roarwriter_shares?script_id=eq.${q(id)}&select=email,role,created_at&order=created_at`);
+export const addShare = (id, email, role) => rest('roarwriter_shares?on_conflict=script_id,email', { method: 'POST', body: { script_id: id, email: email.trim().toLowerCase(), role }, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } });
+export const setShareRole = (id, email, role) => rest(`roarwriter_shares?script_id=eq.${q(id)}&email=eq.${q(email)}`, { method: 'PATCH', body: { role }, headers: { Prefer: 'return=minimal' } });
+export const removeShare = (id, email) => rest(`roarwriter_shares?script_id=eq.${q(id)}&email=eq.${q(email)}`, { method: 'DELETE' });
 
 // the AI, through the Edge Function (the API key lives there, never in the app)
 export async function askAI(payload){

@@ -1,4 +1,4 @@
-import { authMessage, askAI, currentUser, onAuth, recover, signIn, signOut, signUp } from './cloud.js';
+import { addShare, authMessage, askAI, currentUser, listShares, myRole, onAuth, recover, removeShare, setShareRole, signIn, signOut, signUp } from './cloud.js';
 import { createStore } from './store.js';
 import { LABEL, TYPES, blankScript, charactersOf, isGreek, metaOf, normalize, pageCount, scenesOf, upper } from './model.js';
 import { Editor } from './editor.js';
@@ -112,10 +112,15 @@ async function viewLibrary(){
         h('div', { class: 'chips' },
           h('span', { class: 'chip' }, `${s.meta?.pages || 1} ${s.meta?.pages === 1 ? 'page' : 'pages'}`),
           h('span', { class: 'chip' }, `${s.meta?.scenes || 0} ${s.meta?.scenes === 1 ? 'scene' : 'scenes'}`),
+          s.role && s.role !== 'owner' ? h('span', { class: 'chip shared' }, h('span', { html: I.people }), s.owner_name ? `by ${s.owner_name}` : 'Shared', s.role === 'view' ? ' · view' : '') : null,
           h('span', { class: 'chip quiet' }, ago(s.updated_at)))),
       h('div', { class: 'tile-acts' },
         h('button', { class: 'ib glass', title: 'Duplicate', 'aria-label': 'Duplicate', html: I.dup, onclick: async (e) => { e.stopPropagation(); const d = await store.open(s.id); if (d){ d.title = (d.title || 'Untitled') + ' (copy)'; d.titlePage.title = d.title; await newScript(d, false); draw(list = await store.list()); toast('Duplicated'); } } }),
-        h('button', { class: 'ib glass danger', title: 'Delete', 'aria-label': 'Delete', html: I.trash, onclick: async (e) => {
+        s.role && s.role !== 'owner' ? h('button', { class: 'ib glass danger', title: 'Leave', 'aria-label': 'Leave', html: I.leave, onclick: async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Leave “${s.title || 'Untitled'}”? It will go from your scripts; ${s.owner_name || 'its owner'} can share it again.`)) return;
+          try { await removeShare(s.id, currentUser().email.toLowerCase()); store.forget(s.id); list = list.filter((x) => x.id !== s.id); draw(); } catch (err) { toast(err.message || 'Could not leave it now.'); }
+        } }) : h('button', { class: 'ib glass danger', title: 'Delete', 'aria-label': 'Delete', html: I.trash, onclick: async (e) => {
           e.stopPropagation();
           if (!confirm(`Delete “${s.title || 'Untitled'}”? This cannot be undone.`)) return;
           try { await store.remove(s.id); } catch { toast('Deleted here; it will go from the account when the connection is back.'); }
@@ -165,12 +170,15 @@ async function viewScript(id){
   if (!script){ toast('This script is not here.'); location.hash = ''; return; }
   document.title = (script.title || 'Untitled') + ' · RoarWriter';
   script.tags = normalizeTags(script.tags);
+  // Collaborate: 'owner', 'edit' or 'view' (read only: nothing is changed or sent)
+  let role = store.roleOf(id);
+  myRole(id).then((r) => { if (r !== role){ role = r; applyRole(); } });
 
   const saveState = h('span', { class: 'save' }, 'Saved');
   // on a phone the pages and Saved sit under the title (.title-sub); the bar's own ones are hidden there
   const pagesSub = h('span', {}, '1 page'), saveSub = h('span', { class: 'save' }, 'Saved');
   store.onState((s) => { for (const e of [saveState, saveSub]){ e.textContent = s === 'saving' ? 'Saving…' : s === 'offline' ? (e === saveSub ? 'Saved here' : 'Saved on this computer') : 'Saved'; e.dataset.s = s; } });
-  const save = () => store.save(id, script);
+  const save = () => { if (role !== 'view') store.save(id, script); };
 
   // the bar: back, the title, the kind of element, pages, exports, AI
   const titleIn = h('input', { class: 'title-in', value: script.title || '', placeholder: 'Untitled', 'aria-label': 'Title', oninput: (e) => { script.title = e.target.value; script.titlePage.title = e.target.value; document.title = (script.title || 'Untitled') + ' · RoarWriter'; tpTitle.textContent = e.target.value; save(); } });
@@ -182,10 +190,12 @@ async function viewScript(id){
   // title page and the exports
   const scenesBtn = h('button', { class: 'btn narrow-only', type: 'button', title: 'Scenes and characters', 'aria-label': 'Scenes and characters', onclick: () => openSide() }, h('span', { html: I.scenes }));
   const moreBtn = h('button', { class: 'btn phone-only', type: 'button', title: 'More', 'aria-label': 'More', onclick: () => moreMenu() }, h('span', { html: I.more }));
+  const roChip = h('span', { class: 'chip ro', hidden: true }, 'View only');
   const bar = h('header', { class: 'top edit-top' },
     h('a', { class: 'ib', href: '#', title: 'All scripts', 'aria-label': 'All scripts', html: I.back }),
-    h('div', { class: 'title-box' }, titleIn, h('div', { class: 'title-sub' }, pagesSub, ' · ', saveSub)),
+    h('div', { class: 'title-box' }, titleIn, h('div', { class: 'title-sub' }, pagesSub, ' · ', saveSub)), roChip,
     typeBtn, pages, h('div', { class: 'spacer' }), saveState,
+    h('button', { class: 'btn wide-only', type: 'button', onclick: () => share() }, h('span', { html: I.people }), h('span', { class: 'lbl' }, 'Share')),
     h('button', { class: 'btn wide-only', type: 'button', onclick: () => showBreakdown() }, h('span', { html: I.tag }), h('span', { class: 'lbl' }, 'Breakdown')),
     h('button', { class: 'btn wide-only', type: 'button', onclick: () => titlePage() }, h('span', { html: I.page }), h('span', { class: 'lbl' }, 'Title page')),
     exportBtn, scenesBtn, aiBtn, moreBtn);
@@ -247,6 +257,14 @@ async function viewScript(id){
   // Greek capitals lose their accents (ΝΥΧΤΑ, not ΝΎΧΤΑ) when the page knows it is Greek
   desk.lang = isGreek([tp.title, ...script.els.map((e) => e.x)].join(' ')) ? 'el' : 'en';
   const zoom = pageZoom(paper, desk);
+  // on a computer the zoom sits in the bar: − 100% + (and Cmd/Ctrl + − 0, or a pinch on the trackpad)
+  const zoomPct = h('b', {}, zoom.label());
+  zoom.onChange(() => { zoomPct.textContent = zoom.label(); });
+  const zoomPill = h('div', { class: 'zoom-pill wide-only', title: 'Zoom' },
+    h('button', { type: 'button', 'aria-label': 'Zoom out', html: I.minus, onclick: () => zoom.by(-0.1) }),
+    h('button', { type: 'button', class: 'zp-v', 'aria-label': 'Actual size', onclick: () => zoom.reset() }, zoomPct),
+    h('button', { type: 'button', 'aria-label': 'Zoom in', html: I.plus, onclick: () => zoom.by(0.1) }));
+  bar.insertBefore(zoomPill, saveState.nextSibling);
 
   // the AI
   const aiPanel = h('aside', { class: 'ai', hidden: true });
@@ -298,7 +316,7 @@ async function viewScript(id){
   repaint();
   // right click on a word or a selection: tag it for the breakdown (on a phone, select it and press Tag)
   editor.box.addEventListener('contextmenu', (e) => {
-    if (!pickWord()) return;
+    if (role === 'view' || !pickWord()) return;
     e.preventDefault();
     tagMenu(e.clientX, e.clientY);
   });
@@ -307,6 +325,72 @@ async function viewScript(id){
   function showPages(){ const n = pageCount(script.els); pages.textContent = pagesSub.textContent = `${n} ${n === 1 ? 'page' : 'pages'}`; }
   showPages();
   const offKeyboard = followKeyboard(kindBar);
+
+  /* Collaborate: someone else's changes come in while the script is open (merged with what is written here) */
+  const offWatch = store.watch(id, (data) => {
+    if (!editor) return;
+    script.title = data.title; Object.assign(script.titlePage, data.titlePage); Object.assign(script.settings, data.settings); script.tags = normalizeTags(data.tags);
+    editor.setEls(data.els);
+    if (document.activeElement !== titleIn) titleIn.value = script.title || '';
+    tpPaper.querySelectorAll('.tpf').forEach((f) => { if (document.activeElement !== f) f.textContent = script.titlePage[f.dataset.k] || ''; });
+    showPages(); drawSide(); repaint();
+    saveState.textContent = saveSub.textContent = 'Updated';
+  });
+  // read only: the page, the title page and the title cannot be changed, and nothing is sent
+  function applyRole(){
+    if (!editor) return;
+    const ro = role === 'view';
+    editor.readOnly(ro);
+    tpPaper.querySelectorAll('.tpf').forEach((f) => { f.contentEditable = ro ? 'false' : (f.dataset.ce || 'true'); });
+    titleIn.readOnly = ro;
+    roChip.hidden = !ro;
+    document.body.classList.toggle('rw-readonly', ro);
+  }
+  tpPaper.querySelectorAll('.tpf').forEach((f) => { f.dataset.ce = f.contentEditable; });
+  applyRole();
+
+  /* Share: the owner invites people by email to edit or to read; everyone sees who it is shared with */
+  async function share(){
+    const me = currentUser();
+    const body = h('div', { class: 'stack share' });
+    const msg = h('p', { class: 'msg' });
+    const say = (t, kind = '') => { msg.textContent = t; msg.className = 'msg' + (kind ? ' ' + kind : ''); };
+    const roleSeg = (value, on) => { const seg = h('div', { class: 'seg' }, ...[['edit', 'Can edit'], ['view', 'Can view']].map(([k, l]) => h('button', { type: 'button', class: value === k ? 'on' : '', onclick: (e) => { [...seg.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); on(k); } }, l))); return seg; };
+    const draw = async () => {
+      let people = [];
+      try { people = await listShares(id); }
+      catch (e) { body.replaceChildren(h('p', { class: 'msg err' }, e.status === 404 ? 'Sharing is not switched on yet: run the Collaborate part of supabase/roarwriter.sql in Supabase.' : (e.message || 'No connection.'))); return; }
+      const owner = role === 'owner';
+      const rows = people.map((p) => h('div', { class: 'share-row' },
+        h('span', { class: 'share-av' }, p.email[0].toUpperCase()),
+        h('span', { class: 'share-who' }, h('b', {}, p.email === me.email?.toLowerCase() ? 'You' : p.email), h('small', {}, p.email === me.email?.toLowerCase() ? p.email : `added ${ago(p.created_at)}`)),
+        owner ? roleSeg(p.role, async (r) => { try { await setShareRole(id, p.email, r); say(`${p.email} ${r === 'edit' ? 'can edit' : 'can read'} it now.`, 'ok'); } catch (e) { say(e.message, 'err'); } }) : h('span', { class: 'chip' }, p.role === 'edit' ? 'Can edit' : 'Can view'),
+        owner || p.email === me.email?.toLowerCase() ? h('button', { class: 'ib', type: 'button', title: owner ? 'Remove' : 'Leave', 'aria-label': owner ? 'Remove' : 'Leave', html: I.x, onclick: async () => {
+          if (!owner && !confirm('Leave this script? It will go from your scripts.')) return;
+          try { await removeShare(id, p.email); if (owner) draw(); else { close(); store.forget(id); location.hash = ''; } } catch (e) { say(e.message, 'err'); }
+        } }) : null));
+      let invRole = 'edit';
+      const email = h('input', { class: 'input', type: 'email', placeholder: 'Their email (their RoarMe account)', autocomplete: 'off' });
+      const invite = async () => {
+        const v = email.value.trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return say('Type an email address.', 'err');
+        if (v === me.email?.toLowerCase()) return say('That is you.', 'err');
+        try { await addShare(id, v, invRole); email.value = ''; say(`Shared with ${v}. They see it in their scripts when they sign in to RoarWriter with this email.`, 'ok'); draw(); }
+        catch (e) { say(e.message || 'Could not share it now.', 'err'); }
+      };
+      email.addEventListener('keydown', (e) => { if (e.key === 'Enter'){ e.preventDefault(); invite(); } });
+      body.replaceChildren(...[
+        owner ? h('div', { class: 'share-add' }, email, roleSeg(invRole, (r) => { invRole = r; }), h('button', { class: 'btn primary', type: 'button', onclick: invite }, 'Invite')) : h('p', { class: 'muted small' }, role === 'edit' ? 'You can edit this script. Only its owner can share it with others.' : 'You can read this script. Only its owner can share it or let you edit.'),
+        msg,
+        h('div', { class: 'share-list' },
+          h('div', { class: 'share-row' }, h('span', { class: 'share-av own' }, (owner ? me.email : '★')[0].toUpperCase()), h('span', { class: 'share-who' }, h('b', {}, owner ? 'You' : (store.list && (await store.list()).find((x) => x.id === id)?.owner_name) || 'The owner'), h('small', {}, 'Owner')), h('span', { class: 'chip' }, 'Owner')),
+          ...rows),
+        h('p', { class: 'hint' }, 'Everyone writes in the same script: what each person writes comes in for the others within a few seconds, and changes to different lines never overwrite each other. People who can view read it, and export it, but cannot change it.')]);
+    };
+    const close = modal('Share', body, { wide: true });
+    body.append(h('p', { class: 'muted' }, 'Loading…'));
+    draw();
+  }
   drawSide();
   const first = script.els[script.els.length - 1];
   editor.focusEl(first.id, first.x.length);
@@ -314,19 +398,23 @@ async function viewScript(id){
   const keys = (e) => {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key === 's'){ e.preventDefault(); store.flush(); }
+    if (mod && !e.shiftKey && (e.key === '=' || e.key === '+')){ e.preventDefault(); zoom.by(0.1); }
+    if (mod && e.key === '-'){ e.preventDefault(); zoom.by(-0.1); }
+    if (mod && e.shiftKey && (e.key === ')' || e.code === 'Digit0')){ e.preventDefault(); zoom.reset(); }
     if (mod && e.key === 'p'){ e.preventDefault(); pdf(); }
     if (mod && e.shiftKey && (e.key === 'a' || e.key === 'A')){ e.preventDefault(); toggleAI(); }
   };
   document.addEventListener('keydown', keys);
   const offMenu = window.rwDesktop?.onMenu?.((cmd) => {
     if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
+    else if (cmd === 'zoom-in') zoom.by(0.1); else if (cmd === 'zoom-out') zoom.by(-0.1); else if (cmd === 'zoom-reset') zoom.reset();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
-  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); zoom.off(); document.removeEventListener('selectionchange', onSel); sizeWatch.disconnect(); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
+  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); offWatch(); zoom.off(); document.removeEventListener('selectionchange', onSel); sizeWatch.disconnect(); clearPaint(); editor?.destroy(); editor = null; await store.flush(); };
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
-    const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...TYPES.map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (navigator.platform.includes('Mac') ? '⌘' : 'Ctrl ') + n))),
+    const menu = h('div', { class: 'menu', style: `left:${r.left}px;top:${r.bottom + 6}px` }, ...TYPES.map(([k, l, n]) => h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); editor.setCurrentType(k); menu.remove(); } }, h('span', {}, l), h('kbd', {}, (DESKTOP && navigator.platform.includes('Mac') ? '⌘' : navigator.platform.includes('Mac') ? '⌃' : 'Ctrl ') + n))),
       h('p', { class: 'menu-hint' }, 'Enter goes on to what usually comes next. Tab changes the kind.'));
     showMenu(menu);
   }
@@ -405,6 +493,7 @@ async function viewScript(id){
       h('div', { class: 'zoom-row' }, h('span', {}, 'Zoom'),
         h('button', { class: 'ib', type: 'button', 'aria-label': 'Smaller', html: I.minus, onmousedown: step(-0.1) }), pct,
         h('button', { class: 'ib', type: 'button', 'aria-label': 'Bigger', html: I.plus, onmousedown: step(0.1) })),
+      h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); share(); } }, h('span', {}, 'Share'), h('kbd', {}, 'write it together')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); showBreakdown(); } }, h('span', {}, 'Breakdown'), h('kbd', {}, 'cast, locations, props')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); titlePage(); } }, h('span', {}, 'Title page'), h('kbd', {}, 'title, author, page size')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'Export PDF'), h('kbd', {}, 'to send or print')),
@@ -489,12 +578,14 @@ async function viewScript(id){
 /* Zoom of the page on phones and tablets (Alex, 24 Oct): the letters grow or shrink and the lines wrap again, so
    the page never has to be moved sideways. Two fingers on the page pinch it; ⋯ > Zoom has − and +. Kept per device. */
 function pageZoom(paper, desk){
-  const MIN = 0.7, MAX = 2;
+  const MIN = 0.5, MAX = 2;
+  let changed = () => {};
   let z = 1;
   try { z = Math.min(MAX, Math.max(MIN, +localStorage.getItem('rw_zoom') || 1)); } catch {}
   const set = (v, keep = true) => {
     z = Math.round(Math.min(MAX, Math.max(MIN, v)) * 100) / 100;
     desk.style.setProperty('--z', z);
+    changed();
     if (keep) try { localStorage.setItem('rw_zoom', String(z)); } catch {}
   };
   set(z, false);
@@ -509,15 +600,20 @@ function pageZoom(paper, desk){
   desk.addEventListener('touchmove', move, { passive: false });
   desk.addEventListener('touchend', up); desk.addEventListener('touchcancel', up);
   desk.addEventListener('gesturestart', gesture); desk.addEventListener('gesturechange', gesture);
+  // a pinch on a computer's trackpad arrives as the wheel with Ctrl held
+  const wheel = (e) => { if (!e.ctrlKey) return; e.preventDefault(); set(z * Math.exp(-e.deltaY / 200)); };
+  desk.addEventListener('wheel', wheel, { passive: false });
   return {
     by: (d) => set(z + d),
+    reset: () => set(1),
+    onChange: (fn) => { changed = fn; },
     label: () => `${Math.round(z * 100)}%`,
     off: () => {},
   };
 }
 
 // short names for the kinds on the phone's bar
-const SHORT = { scene: 'Scene', paren: '(Paren)' };
+const SHORT = { scene: 'Scene', paren: '(Paren)', general: 'Plain' };
 
 /* The kinds bar stays on the keyboard: a phone's keyboard covers the bottom of the window without making it any
    smaller, so the bar is lifted by what the visible part (visualViewport) leaves out, and the line being written
