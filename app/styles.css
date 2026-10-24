@@ -177,7 +177,8 @@ html[data-desktop=win32] .top{padding-right:150px}
 
   /* the page fills the width, the text at a size to read and write (the PDF keeps the real page) */
   .paper,.paper.letter{width:auto;max-width:8.27in;min-height:calc(100dvh - 190px);margin:0 auto;padding:44px 8% 70px 11%;border-radius:10px}
-  .script{min-height:50dvh}
+  /* the letters follow the zoom (pinch on the page, or ⋯ > Zoom); the lines wrap again, the page never scrolls sideways */
+  .script{min-height:50dvh;font-size:calc(12pt * var(--z,1));line-height:1}
   .script p[data-t=character]{margin-left:37%} .script p[data-t=paren]{margin-left:27%;width:38%} .script p[data-t=dialogue]{margin-left:17%;width:58%}
 
   /* scenes and characters: over the page, from the scenes button */
@@ -204,6 +205,10 @@ html[data-desktop=win32] .top{padding-right:150px}
 
   .menu{max-width:calc(100vw - 16px)}
   .menu button{padding:12px 14px;font-size:15px}
+  .menu .zoom-row{display:flex;align-items:center;gap:8px;padding:6px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  .menu .zoom-row > span{flex:1;font-size:15px;padding-left:6px}
+  .menu .zoom-row .ib{width:38px;height:38px;padding:0;justify-content:center;border:1px solid var(--edge);background:var(--glass);border-radius:50%}
+  .menu .zoom-row b{min-width:48px;text-align:center;font-size:14px;font-variant-numeric:tabular-nums}
   .suggest{max-width:calc(100% - 20px);min-width:180px}
   .suggest button{padding:11px 12px;font-size:14px}
   .modal{max-height:calc(100dvh - 32px)}
@@ -222,7 +227,7 @@ html[data-desktop=win32] .top{padding-right:150px}
   .top-title{font-size:22px;margin:0 2px}
   .desk{padding:8px 8px calc(96px + env(safe-area-inset-bottom))}
   .paper,.paper.letter{padding:26px 18px 60px 22px;border-radius:12px;min-height:calc(100dvh - 160px)}
-  .script{font-size:15px;line-height:1.3}
+  .script{font-size:calc(15px * var(--z,1));line-height:1.3}
   .script p,.ai-preview p{margin-top:1.1em}
   .script p[data-t=scene]{margin-top:2em}
   .script p[data-t=character]{margin-left:30%} .script p[data-t=paren]{margin-left:20%;width:62%} .script p[data-t=dialogue]{margin-left:9%;width:84%}
