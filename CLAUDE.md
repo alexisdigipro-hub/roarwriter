@@ -24,6 +24,8 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
   The desktop installers come from a tag `vX.Y.Z` (.github/workflows/desktop.yml): bump `version` in package.json, tag,
   push; the release's files are the download links and what the app's updater (electron/updater.js) looks at.
 - Work on a branch, open a PR, wait for the green check, merge it yourself (Alex's rule for every Roar repository).
+- Tools (Alex, 24 Oct, from the other apps): app/js/tools.js (Settings, Find & Replace, notes, cards, read aloud, report, sides),
+  app/js/prefs.js (per device); script.notes / script.cards, merged like the rest; scene numbers and (CONT'D) from print.js decorOf.
 - Formats (Alex, 24 Oct): app/js/formats.js (kinds, next/tab, % margins as CSS for the editor and the PDF, page breaks,
   start) and settings.format; film is the default. Fade In: app/js/fadein.js (zip read/write, OSF).
 - Phones and tablets (Alex, 24 Oct): the web version under 860px (styles.css, last two blocks) has the fluid page, the kinds bar on the

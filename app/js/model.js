@@ -56,6 +56,9 @@ export function normalize(d){
     .filter((e) => e && LABEL[e.t]).map((e) => ({ id: e.id || uid(), t: e.t, x: String(e.x ?? '') }));
   if (!s.els.length) s.els = blankScript().els;
   s.tags = Array.isArray(d?.tags) ? d.tags : [];
+  // notes on lines ({ id, el, text, by, at, done }) and the index cards' own words and colours ({ sceneId: { syn, color } })
+  s.notes = Array.isArray(d?.notes) ? d.notes.filter((n) => n && n.id && n.el) : [];
+  s.cards = d?.cards && typeof d.cards === 'object' && !Array.isArray(d.cards) ? d.cards : {};
   return s;
 }
 
@@ -132,5 +135,33 @@ export function mergeScripts(base, mine, theirs){
   const tag = (t) => t.cat + '|' + String(t.name).toLowerCase();
   const bt = new Set((base.tags || []).map(tag)), mt = new Set((mine.tags || []).map(tag));
   const tags = [...(theirs.tags || []).filter((t) => mt.has(tag(t)) || !bt.has(tag(t))), ...(mine.tags || []).filter((t) => !bt.has(tag(t)) && !(theirs.tags || []).some((x) => tag(x) === tag(t)))];
-  return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags };
+  // notes: one by one, what changed here wins, what was added on either side stays, what was deleted here goes
+  const byId = (l) => new Map((l || []).map((n) => [n.id, n]));
+  const bn = byId(base.notes), mn = byId(mine.notes), tn = byId(theirs.notes);
+  const notes = [...new Set([...tn.keys(), ...mn.keys()])].map((k) => {
+    const m = mn.get(k), t = tn.get(k), b = bn.get(k);
+    if (!m) return b ? null : t;                        // deleted here (or only theirs)
+    if (!t) return b ? null : m;                        // deleted there (or only mine)
+    return JSON.stringify(m) !== JSON.stringify(b) ? m : t;
+  }).filter(Boolean);
+  const cards = fields(base.cards || {}, mine.cards || {}, theirs.cards || {});
+  return { ...theirs, title: mine.title !== base.title ? mine.title : theirs.title, titlePage: fields(base.titlePage, mine.titlePage, theirs.titlePage), settings: fields(base.settings, mine.settings, theirs.settings), els, tags, notes, cards };
+}
+
+/* Scene numbers: 1, 2, 3 (a sitcom letters them, A, B, C); a comic's pages and a play's scenes count too */
+export function sceneNumbers(els, letters = false){
+  const out = new Map(); let n = 0;
+  const L = (k) => { let s = ''; for (k++; k > 0; k = Math.floor((k - 1) / 26)) s = String.fromCharCode(65 + ((k - 1) % 26)) + s; return s; };
+  for (const e of els) if (e.t === 'scene'){ out.set(e.id, letters ? L(n) : String(n + 1)); n++; }
+  return out;
+}
+/* (CONT'D): a character who speaks again in the same scene with only action between, as Final Draft adds it */
+export function contdOf(els){
+  const out = new Set(); let last = '';
+  for (const e of els){
+    if (e.t === 'scene' || e.t === 'act' || e.t === 'page') last = '';
+    else if (e.t === 'character'){ const n = cleanName(e.x); if (n && n === last && !/\(CONT'?D\)|\(ΣΥΝ\.?\)/i.test(e.x)) out.add(e.id); last = n; }
+    else if (!['action', 'dialogue', 'paren', 'lyric', 'general'].includes(e.t)) last = '';
+  }
+  return out;
 }
