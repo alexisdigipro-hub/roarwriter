@@ -25,6 +25,8 @@ jobs:
           for f in electron/*.js; do node --check "$f"; done
           for f in app/js/*.js; do node --input-type=module --check < "$f"; done
           node -e "require('./package.json')"
+          # the version the app shows is package.json's
+          grep -q "VERSION = '$(node -p "require('./package.json').version")'" app/js/version.js || { echo "app/js/version.js does not match package.json"; exit 1; }
       - name: Fountain round trip
         run: |
           cat > /tmp/t.mjs <<'JS'
@@ -48,6 +50,12 @@ jobs:
       - name: Put app/ on the gh-pages branch
         run: |
           cd app
+          # every file asked for with this build's mark, so a browser never keeps last version's scripts
+          # (GitHub Pages lets them be cached for 10 minutes, and Safari keeps modules longer)
+          V=${GITHUB_SHA::7}
+          sed -i -E "s#(from '\./[a-z]+\.js)'#\1?v=$V'#g; s#(import\('\./[a-z]+\.js)'#\1?v=$V'#g" js/*.js
+          sed -i -E "s#href=\"styles\.css\"#href=\"styles.css?v=$V\"#; s#src=\"js/main\.js\"#src=\"js/main.js?v=$V\"#" index.html
+          grep -q "main.js?v=$V" index.html
           touch .nojekyll
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"

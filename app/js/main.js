@@ -11,6 +11,7 @@ import { onPref, pref } from './prefs.js';
 import { decorOf, exportPDF, paginate } from './print.js';
 import { CAT, CATS, breakdownCSV, breakdownOf, clearPaint, findIn, fold, normalizeTags, paintTags } from './breakdown.js';
 import { I, ago, download, esc, h, modal, pickFile, toast } from './ui.js';
+import { VERSION } from './version.js';
 
 /* RoarWriter (The Mad Lions Lab, Oct 2026): write screenplays in the industry format, in English or Greek, on a
    computer (the Mac and Windows app) or in a browser (the web version). Signed in with a RoarMe account, the
@@ -191,6 +192,7 @@ function account(){
   const close = modal('Account', h('div', { class: 'stack' },
     h('p', {}, h('b', {}, user.user_metadata?.name || ''), h('br'), h('span', { class: 'muted' }, user.email)),
     h('p', { class: 'muted small' }, 'Your RoarMe account. Your scripts are kept in it and on this computer.'),
+    h('p', { class: 'muted small' }, `RoarWriter ${VERSION}${DESKTOP ? ' for ' + (window.rwDesktop.platform === 'darwin' ? 'Mac' : 'Windows') : ' on the web'}`),
     h('button', { class: 'btn', onclick: async () => { await store?.flush(); await signOut(); close(); } }, 'Sign out')));
 }
 
