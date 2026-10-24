@@ -1,7 +1,8 @@
 // RoarWriter's AI (Edge Function roarwriter-ai, in RoarMe's Supabase project). The app sends what is asked (the scene
-// with the cursor, or the whole script for coverage, questions, continuity, pacing, the pitch pack, a batch of lines
-// to translate, dictated words to lay out); this asks Claude and sends back the answer: Fountain when it is script,
-// JSON when the app draws it, plain text otherwise. Only a signed-in RoarMe account may ask. The Anthropic API key is
+// with the cursor, or the whole script for questions, coverage, continuity, pacing, the beats, the budget pass, the
+// pitch pack; a batch of lines to translate, dictated words to lay out, a question for the research desk, which
+// searches the web); this asks Claude and sends back the answer: Fountain when it is script, JSON when the app
+// draws it, plain text otherwise. Only a signed-in RoarMe account may ask. The Anthropic API key is
 // the function's secret ANTHROPIC_API_KEY (Supabase > Edge Functions > Secrets), never in the app.
 import Anthropic from 'npm:@anthropic-ai/sdk'
 

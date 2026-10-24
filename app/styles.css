@@ -718,3 +718,4 @@ body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,
 .pk-series small{font:800 9px var(--ui);letter-spacing:.2em;color:#4a90e2}
 @media (max-width:860px){ .series{grid-template-columns:1fr;padding:12px} .lane{width:250px} .strip{cursor:default} .st-day{display:block} .beats{padding:12px} .fact{grid-template-columns:1fr 36px} .fact select{grid-column:1/-1} }
 .beat-sc,.bt-tpl,.card-w{padding:0 30px 0 12px;line-height:1.2}
+@media (max-width:1600px) and (min-width:861px){ .edit-top .btn.wide-only:has(> .lbl){flex:none;min-width:36px;justify-content:center} }
