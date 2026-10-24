@@ -26,6 +26,7 @@ export const PRINT_CSS = `
 .rwprint .p.paren{margin:0 0 0 1.6in;width:2.3in}
 .rwprint .p.dialogue{margin:0 0 0 1in;width:3.5in}
 .rwprint .p.transition{text-align:right;text-transform:uppercase}
+.rwprint[data-names=centre]:is([data-fmt=film],[data-fmt=tv],[data-fmt=multicam]) .p.character{margin-left:1in!important;width:3.5in;text-align:center}
 .rwprint .p.shot{text-transform:uppercase}
 .rwprint .tp{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:2.6in}
 .rwprint .tp h1{font:inherit;text-transform:uppercase;margin:0;text-decoration:underline}
@@ -78,6 +79,7 @@ export function paginate(script, d = decorOf(script)){
   const host = document.createElement('div');
   host.className = 'rwprint' + (letter ? ' letter' : '');
   host.dataset.fmt = fmtOf(script);
+  host.dataset.names = script.settings?.names || 'fd';
   host.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden';
   const style = document.createElement('style');
   style.textContent = PRINT_CSS + FORMAT_CSS;
@@ -135,7 +137,7 @@ export function printHTML(script, { titlePage = script.settings?.titlePrint !== 
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(script.title || 'Script')}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cousine:ital,wght@0,400;0,700;1,400&display=swap">
 <style>${PRINT_CSS}${FORMAT_CSS}@page{size:${letter ? '8.5in 11in' : 'A4'};margin:0}</style></head>
-<body class="rwprint${letter ? ' letter' : ''}" data-fmt="${fmtOf(script)}" data-sn="${sn}" style="margin:0">${title}${body}</body></html>`;
+<body class="rwprint${letter ? ' letter' : ''}" data-fmt="${fmtOf(script)}" data-sn="${sn}" data-names="${set.names === 'centre' ? 'centre' : 'fd'}" style="margin:0">${title}${body}</body></html>`;
 }
 
 // the PDF: in the app, Electron prints the pages to a file; in a browser, they open in a tab to print or save

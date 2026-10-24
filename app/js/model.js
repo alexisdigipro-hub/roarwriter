@@ -110,7 +110,10 @@ export function pageCount(els){
   return Math.max(1, Math.ceil(lines / 55));
 }
 
-export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length, format: s.settings?.format || 'film' });
+// what the list of scripts shows: the numbers, and the first lines (peek), drawn small as the page begins
+export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length, format: s.settings?.format || 'film',
+  words: s.els.reduce((a, e) => a + (e.x.trim() ? e.x.trim().split(/\s+/).length : 0), 0),
+  peek: s.els.filter((e) => e.x.trim()).slice(0, 12).map((e) => [e.t, e.x.split('\n')[0].slice(0, 80)]) });
 
 /* Two people on one script (Collaborate): what each changed since the copy both started from (base) is kept.
    The other side's script is taken as it is, then this side's own changes are put on it: lines it edited or

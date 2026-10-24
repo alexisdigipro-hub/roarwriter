@@ -30,12 +30,13 @@ export function openSettings(ctx, tab = 'script'){
       row('Format', h('select', { class: 'input', onchange: (e) => ctx.setFormat(e.target.value) }, ...FORMAT_LIST.map((k) => h('option', { value: k, selected: fmtOf(script) === k }, FORMATS[k].label))), 'The lines keep their kinds; the page is laid out as the format has it.'),
       row('Page size', segOf(set.page || 'a4', [['a4', 'A4'], ['letter', 'US Letter']], (k) => ctx.setPage(k))),
       row('Scene numbers', segOf(set.sceneNumbers || 'off', [['off', 'Off'], ['left', 'Left'], ['right', 'Right'], ['both', 'Both']], (k) => { set.sceneNumbers = k; ctx.save(); ctx.redecorate(); }), 'On the page and in the PDF, as a shooting script has them.'),
+      row('Character names', segOf(set.names || 'fd', [['fd', 'As Final Draft'], ['centre', 'Centred']], (k) => { set.names = k; ctx.save(); ctx.redecorate(); }), 'As Final Draft: at 3.7", the industry layout. Centred: over the dialogue, on the page and in the PDF.'),
       toggle(set.contd !== false, (on) => { set.contd = on; ctx.save(); ctx.redecorate(); }, "(CONT'D)", 'A character who speaks again in the same scene, with only action between.'),
       row('Title page', h('button', { class: 'btn', type: 'button', onclick: () => ctx.titlePage() }, 'Edit the title page'), 'Or click on it, on the first page, and type.'),
     ],
     writing: () => [
       toggle(pref('suggest'), (on) => setPref('suggest', on), 'Suggestions', 'Names, INT./EXT., places and the time of day while you type.'),
-      toggle(pref('spell'), (on) => { setPref('spell', on); ctx.editor().box.spellcheck = on; }, 'Spelling', 'Underline the words the dictionary does not know.'),
+      toggle(pref('spell'), (on) => { setPref('spell', on); ctx.editor().box.spellcheck = on; }, 'Spelling', 'Greek and English: the words the dictionary does not know are underlined. In a browser, the languages are the browser’s own (Chrome: Settings > Languages > Spell check).'),
       toggle(pref('typewriter'), (on) => setPref('typewriter', on), 'Typewriter scrolling', 'The line you write stays in the middle of the window.'),
       toggle(pref('focus'), (on) => { setPref('focus', on); ctx.redecorate(); }, 'Focus on the scene', 'Every other scene fades while you write.'),
       h('p', { class: 'hint' }, 'Enter goes on to what usually comes next, Tab changes the kind of line, as in Final Draft.'),
@@ -56,7 +57,7 @@ export function openSettings(ctx, tab = 'script'){
       h('p', { class: 'hint' }, 'Each character gets a voice of their own from the ones your device has, in the script’s language.'),
     ],
     keys: () => [h('div', { class: 'keys' }, ...[
-      ['Enter', 'The next kind of line'], ['Tab / ⇧Tab', 'Change the kind of line'], [`${mod} 1 … 9`, 'Pick a kind (0: Unformatted)'],
+      ['Enter', 'The next kind of line'], ['Tab / ⇧Tab', 'Change the kind of line'], [`${navigator.platform.includes('Mac') ? '⌥' : 'Alt+'}1 … 9`, 'Pick a kind (0: Unformatted)'],
       [`${mod} Z / ⇧${mod} Z`, 'Undo / redo'], [`${mod} F`, 'Find & replace'], [`${mod} ⇧ M`, 'A note on this line'],
       [`${mod} P`, 'PDF'], [`${mod} ⇧ A`, 'AI'], [`${mod} + / −`, 'Zoom'], ['Right click on a word', 'Tag it, or add a note'],
     ].map(([k, l]) => h('div', { class: 'key-row' }, h('kbd', {}, k), h('span', {}, l))))],
@@ -111,11 +112,11 @@ export function findBar(ctx, host){
     CSS.highlights.set('rw-find-on', new Highlight(...cur));
   }
   function run(){ hits = search(); at = hits.length ? 0 : -1; show(); }
-  function show(){
+  function show(scroll = true){
     count.textContent = q.value ? (hits.length ? `${at + 1} / ${hits.length}` : 'None') : '';
     paint();
     const hit = hits[at];
-    if (hit){ const p = ctx.editor().box.children[hit[0]]; p?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    if (hit && scroll){ const p = ctx.editor().box.children[hit[0]]; p?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   }
   function go(d){ if (!hits.length) return; at = (at + d + hits.length) % hits.length; show(); }
   function apply(list){
@@ -131,7 +132,7 @@ export function findBar(ctx, host){
   return {
     open(replace = false){ bar.hidden = false; bar.classList.toggle('with-rep', replace || bar.classList.contains('with-rep')); const sel = getSelection().toString().trim(); if (sel && !sel.includes('\n')) q.value = sel; q.focus(); q.select(); run(); },
     showReplace(){ bar.classList.add('with-rep'); },
-    refresh(){ if (!bar.hidden && q.value){ hits = search(); at = Math.min(Math.max(at, 0), hits.length - 1); show(); } },
+    refresh(){ if (!bar.hidden && q.value){ hits = search(); at = Math.min(Math.max(at, 0), hits.length - 1); show(false); } },
     close,
   };
 }

@@ -70,7 +70,7 @@ function menu() {
       ...(mac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
     ] },
     { role: 'editMenu' },
-    { label: 'Format', submenu: types.map(([label, t, n]) => ({ label, accelerator: `${cmd}+${n}`, click: () => send('type:' + t) })) },
+    { label: 'Format', submenu: types.map(([label, t, n]) => ({ label, accelerator: `Alt+${n}`, click: () => send('type:' + t) })) },
     { label: 'AI', submenu: [{ label: 'Show AI', accelerator: `${cmd}+Shift+A`, click: () => send('ai') }] },
     // the zoom is the page's, as in Final Draft (the whole window does not grow)
     { label: 'View', submenu: [
