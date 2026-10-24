@@ -1,3 +1,5 @@
+import { KINDS } from './formats.js';
+
 /* The script as data: a title page and a list of elements, each { id, t (type), x (text) }. The same list is
    what the editor draws, what the scenes and characters come from, and what Fountain, Final Draft and the PDF
    are made of. */
@@ -12,7 +14,8 @@ export const TYPES = [
   ['shot', 'Shot', '7'],
   ['general', 'Unformatted Text', '0'], // Final Draft's General: plain text, the whole width, no format
 ];
-export const LABEL = Object.fromEntries(TYPES.map(([k, l]) => [k, l]));
+// every kind any format uses (formats.js); TYPES above are the film's
+export const LABEL = { ...KINDS };
 
 // Enter at the end of an element: what comes next, as in Final Draft
 export const NEXT = { scene: 'action', action: 'action', character: 'dialogue', paren: 'dialogue', dialogue: 'character', transition: 'scene', shot: 'action', general: 'general' };
@@ -59,7 +62,8 @@ export function normalize(d){
 // the scenes, numbered, each with where it starts in the list
 export function scenesOf(els){
   const out = [];
-  els.forEach((e, i) => { if (e.t === 'scene') out.push({ n: out.length + 1, i, id: e.id, text: upper(e.x).trim() || 'NEW SCENE' }); });
+  // (a comic's pages are its scenes)
+  els.forEach((e, i) => { if (e.t === 'scene' || e.t === 'page') out.push({ n: out.length + 1, i, id: e.id, text: upper(e.x).trim() || 'NEW SCENE' }); });
   return out;
 }
 
@@ -91,8 +95,8 @@ export function placesOf(els){
 
 /* Pages by the industry rule of thumb (55 lines a page, Courier 12): how many lines each element takes at its
    width, with the blank line before it. Good for the count in the bar; the PDF lays the pages out for real. */
-const WIDTH = { scene: 61, action: 61, character: 38, paren: 25, dialogue: 35, transition: 61, shot: 61, general: 61 };
-const GAP = { scene: 2, action: 1, character: 1, paren: 0, dialogue: 0, transition: 1, shot: 1, general: 1 };
+const WIDTH = { scene: 61, action: 61, character: 38, paren: 25, dialogue: 35, transition: 61, shot: 61, general: 61, act: 61, endact: 61, lyric: 50, sound: 61, music: 61, video: 29, audio: 29, page: 61, panel: 61, caption: 50 };
+const GAP = { scene: 2, action: 1, character: 1, paren: 0, dialogue: 0, transition: 1, shot: 1, general: 1, act: 0, endact: 2, lyric: 0, sound: 1, music: 1, video: 1, audio: 0, page: 0, panel: 2, caption: 1 };
 export function pageCount(els){
   let lines = 0;
   els.forEach((e, i) => {
@@ -103,7 +107,7 @@ export function pageCount(els){
   return Math.max(1, Math.ceil(lines / 55));
 }
 
-export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length });
+export const metaOf = (s) => ({ author: s.titlePage.author || '', pages: pageCount(s.els), scenes: scenesOf(s.els).length, format: s.settings?.format || 'film' });
 
 /* Two people on one script (Collaborate): what each changed since the copy both started from (base) is kept.
    The other side's script is taken as it is, then this side's own changes are put on it: lines it edited or
