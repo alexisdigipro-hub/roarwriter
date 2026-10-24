@@ -64,7 +64,7 @@ textarea.input{resize:vertical;line-height:1.45}
 .auth-foot{margin-top:28px;font-size:12px;color:var(--muted)}
 
 /* top bar (the Mac's window buttons sit at its left in the app) */
-.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:10px 16px;min-height:58px;background:rgba(22,24,29,.78);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid var(--line);-webkit-app-region:drag}
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:9px 16px;min-height:58px;box-sizing:border-box;background:rgba(22,24,29,.78);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);border-bottom:1px solid var(--line);-webkit-app-region:drag}
 .top > *{-webkit-app-region:no-drag}
 html[data-desktop=darwin] .top{padding-left:84px}
 html[data-desktop=win32] .top{padding-right:150px}
@@ -719,3 +719,18 @@ body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,
 @media (max-width:860px){ .series{grid-template-columns:1fr;padding:12px} .lane{width:250px} .strip{cursor:default} .st-day{display:block} .beats{padding:12px} .fact{grid-template-columns:1fr 36px} .fact select{grid-column:1/-1} }
 .beat-sc,.bt-tpl,.card-w{padding:0 30px 0 12px;line-height:1.2}
 @media (max-width:1600px) and (min-width:861px){ .edit-top .btn.wide-only:has(> .lbl){flex:none;min-width:36px;justify-content:center} }
+
+/* a computer's narrower window (Alex, 25 Oct: no scroll bar when everything fits): the bar keeps to one row; below
+   1300px the page count goes, below 1180px the zoom and the less used tools go into the ⋯ menu */
+@media (max-width:1300px) and (min-width:861px){ .edit-top > .chip:not(.rev):not(.ro){display:none} .view-seg button{padding:0 10px} }
+@media (max-width:1180px) and (min-width:861px){
+  .edit-top .phone-only{display:inline-flex}
+  .edit-top .btn.icon.wide-only,.edit-top .zoom-pill,.edit-top .btn.wide-only[title]{display:none}
+  .edit-top .type-btn{min-width:0}
+}
+/* the ⋯ menu on a computer's narrower window too: the zoom in one row, and the menu scrolls inside a short window */
+.menu{max-height:calc(100vh - 70px);overflow:auto}
+.menu .zoom-row{display:flex;align-items:center;gap:8px;padding:6px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.menu .zoom-row > span{flex:1;font-size:14px;padding-left:6px}
+.menu .zoom-row .ib{width:34px;height:34px;padding:0;justify-content:center;border:1px solid var(--edge);background:var(--glass);border-radius:50%}
+.menu .zoom-row b{min-width:48px;text-align:center;font-size:13.5px;font-variant-numeric:tabular-nums}
