@@ -20,10 +20,14 @@ const segOf = (value, opts, onChange) => {
 const row = (label, control, hint) => h('div', { class: 'set-row' }, h('div', { class: 'set-l' }, h('b', {}, label), hint ? h('small', {}, hint) : null), control);
 
 /* ---------- Settings ---------- */
-export function openSettings(ctx, tab = 'script'){
-  const { script } = ctx, set = script.settings;
+/* With a script open: its own settings and this device's. From the list of scripts (ctx.global): this device's,
+   what a new script starts with, and the account. */
+export function openSettings(ctx, tab = ctx.global ? 'new' : 'script'){
+  const { script } = ctx, set = script?.settings || {};
   const body = h('div', { class: 'settings' });
-  const tabs = [['script', 'Script'], ['writing', 'Writing'], ['revisions', 'Revisions'], ['look', 'Look'], ['pdf', 'PDF'], ['read', 'Read aloud'], ['keys', 'Shortcuts']];
+  const tabs = ctx.global
+    ? [['new', 'New scripts'], ['writing', 'Writing'], ['look', 'Look'], ['read', 'Read aloud'], ['keys', 'Shortcuts'], ['account', 'Account']]
+    : [['script', 'Script'], ['writing', 'Writing'], ['revisions', 'Revisions'], ['look', 'Look'], ['pdf', 'PDF'], ['read', 'Read aloud'], ['keys', 'Shortcuts']];
   const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
   const panes = {
     script: () => [
@@ -36,7 +40,7 @@ export function openSettings(ctx, tab = 'script'){
     ],
     writing: () => [
       toggle(pref('suggest'), (on) => setPref('suggest', on), 'Suggestions', 'Names, INT./EXT., places and the time of day while you type.'),
-      toggle(pref('spell'), (on) => { setPref('spell', on); ctx.editor().box.spellcheck = on; }, 'Spelling', 'Greek and English: the words the dictionary does not know are underlined. In a browser, the languages are the browser’s own (Chrome: Settings > Languages > Spell check).'),
+      toggle(pref('spell'), (on) => { setPref('spell', on); const box = ctx.editor?.()?.box; if (box) box.spellcheck = on; }, 'Spelling', 'Greek and English: the words the dictionary does not know are underlined. In a browser, the languages are the browser’s own (Chrome: Settings > Languages > Spell check).'),
       toggle(pref('typewriter'), (on) => setPref('typewriter', on), 'Typewriter scrolling', 'The line you write stays in the middle of the window.'),
       toggle(pref('focus'), (on) => { setPref('focus', on); ctx.redecorate(); }, 'Focus on the scene', 'Every other scene fades while you write.'),
       h('p', { class: 'hint' }, 'Enter goes on to what usually comes next, Tab changes the kind of line, as in Final Draft.'),
@@ -67,7 +71,7 @@ export function openSettings(ctx, tab = 'script'){
     look: () => [
       row('The page', segOf(pref('page'), [['white', 'White'], ['sepia', 'Sepia'], ['midnight', 'Midnight']], (k) => setPref('page', k)), 'Midnight is a dark page with light letters; the PDF stays white.'),
       toggle(pref('breaks'), (on) => setPref('breaks', on), 'Show where pages end', 'The edge between two sheets, with the page number.'),
-      row('Zoom', h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => ctx.zoom.by(-0.1) }, '−'), h('button', { class: 'btn', type: 'button', onclick: () => ctx.zoom.reset() }, '100%'), h('button', { class: 'btn', type: 'button', onclick: () => ctx.zoom.by(0.1) }, '+')), `Also ${mod} + and ${mod} −, or a pinch.`),
+      ctx.zoom ? row('Zoom', h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: () => ctx.zoom.by(-0.1) }, '−'), h('button', { class: 'btn', type: 'button', onclick: () => ctx.zoom.reset() }, '100%'), h('button', { class: 'btn', type: 'button', onclick: () => ctx.zoom.by(0.1) }, '+')), `Also ${mod} + and ${mod} −, or a pinch.`) : null,
     ],
     pdf: () => [
       toggle(set.titlePrint !== false, (on) => { set.titlePrint = on; ctx.save(); }, 'Title page', 'The first page of the PDF.'),
@@ -78,6 +82,19 @@ export function openSettings(ctx, tab = 'script'){
       toggle(pref('readAction'), (on) => setPref('readAction', on), 'Read the action too', 'Off: only the characters speak, as at a table read.'),
       row('Speed', segOf(String(pref('readRate')), [['0.8', 'Slow'], ['1', 'Normal'], ['1.25', 'Fast']], (k) => setPref('readRate', +k))),
       h('p', { class: 'hint' }, 'Each character gets a voice of their own from the ones your device has, in the script’s language.'),
+    ],
+    // what every new script starts with (on this device)
+    new: () => [
+      row('Format', h('select', { class: 'input', onchange: (e) => setPref('format', e.target.value) }, ...FORMAT_LIST.map((k) => h('option', { value: k, selected: pref('format') === k }, FORMATS[k].label))), 'Offered first when you start a new script, and what Start a new one opens.'),
+      row('Page size', segOf(pref('pageSize') || 'a4', [['a4', 'A4'], ['letter', 'US Letter']], (k) => setPref('pageSize', k)), 'A4 in Europe, US Letter for the American market.'),
+      row('Written by', h('input', { class: 'input', value: pref('author') || '', placeholder: ctx.me?.() || 'Your name', oninput: (e) => setPref('author', e.target.value) }), 'The author on a new script’s title page; empty, your account’s name.'),
+      row('Credit', h('input', { class: 'input', value: pref('credit') || '', placeholder: 'Written by', oninput: (e) => setPref('credit', e.target.value) }), 'e.g. Written by, Screenplay by, Σενάριο.'),
+      row('Contact', h('textarea', { class: 'input', rows: 3, value: pref('contact') || '', placeholder: 'Name, phone, email, agent', oninput: (e) => setPref('contact', e.target.value) }), 'At the foot of a new script’s title page.'),
+      row('Scene numbers', segOf(pref('sceneNumbers') || 'off', [['off', 'Off'], ['left', 'Left'], ['right', 'Right'], ['both', 'Both']], (k) => setPref('sceneNumbers', k)), 'For a new script; each script keeps its own after.'),
+    ],
+    account: () => [
+      row(ctx.me?.() || 'Your account', h('button', { class: 'btn', type: 'button', onclick: () => ctx.signOut?.() }, 'Sign out'), ctx.email || ''),
+      h('p', { class: 'hint' }, `One account for RoarMe, Roardino and RoarWriter. Your scripts are kept in it and on this device. ${ctx.version ? `RoarWriter ${ctx.version}.` : ''}`),
     ],
     keys: () => [h('div', { class: 'keys' }, ...[
       ['Enter', 'The next kind of line'], ['Tab / ⇧Tab', 'Change the kind of line'], [`${navigator.platform.includes('Mac') ? '⌥' : 'Alt+'}1 … 9`, 'Pick a kind (0: Unformatted)'],
@@ -91,7 +108,7 @@ export function openSettings(ctx, tab = 'script'){
   const draw = () => pane.replaceChildren(...panes[tab]());
   body.append(tabSeg, pane);
   draw();
-  modal('Settings', body, { wide: true });
+  modal('Settings', body, { wide: true, onClose: ctx.onClose });
 }
 
 /* ---------- Find & Replace ---------- */

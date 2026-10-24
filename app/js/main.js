@@ -123,6 +123,7 @@ async function viewLibrary(){
       who, h('div', { class: 'spacer' }), search, sort,
       h('button', { class: 'btn', onclick: importScript }, h('span', { html: I.import }), h('span', { class: 'lbl' }, 'Import')),
       h('button', { class: 'btn primary', onclick: () => pickFormat() }, h('span', { html: I.plus }), h('span', { class: 'lbl' }, 'New script')),
+      h('button', { class: 'ib', title: 'Settings', 'aria-label': 'Settings', html: I.gear, onclick: () => openSettings({ global: true, me: () => user.user_metadata?.name || user.email, email: user.email, version: VERSION, signOut: async () => { await store?.flush(); await signOut(); document.querySelector('.modal-bg')?.remove(); }, onClose: () => draw() }) }),
       h('button', { class: 'ib', title: user.email, 'aria-label': 'Account', html: I.user, onclick: account })),
     main);
   let list = [];
@@ -158,9 +159,9 @@ async function viewLibrary(){
   // a new script in a click: the formats used most, the rest one step further
   const starts = () => h('section', { class: 'starts' },
     h('span', { class: 'kicker' }, 'Start a new one'),
-    ...['film', 'tv', 'stage'].map((k) => h('button', { type: 'button', class: 'start', onclick: () => newScript(null, true, k) },
+    ...[...new Set([pref('format') || 'film', 'film', 'tv', 'stage'])].slice(0, 3).map((k) => h('button', { type: 'button', class: 'start', onclick: () => newScript(null, true, k) },
       h('span', { class: 'fmt-mini', 'data-fmt': k, 'aria-hidden': 'true' }, ...miniOf(k)),
-      h('span', { class: 'start-t' }, h('b', {}, FORMATS[k].label), h('small', {}, k === 'film' ? 'Feature or short' : k === 'tv' ? 'An episode, in acts' : 'Theatre, acts and scenes')))),
+      h('span', { class: 'start-t' }, h('b', {}, FORMATS[k].label), h('small', {}, ({ film: 'Feature or short', tv: 'An episode, in acts', stage: 'Theatre, acts and scenes' })[k] || FORMATS[k].note.split(/[:.]/)[0])))),
     h('div', { class: 'start-row' },
       h('button', { type: 'button', class: 'btn', onclick: async () => { const sid = crypto.randomUUID(); store.save(sid, normalize(blankSeries(''))); await store.flush(); location.hash = '#s/' + sid; } }, h('span', { html: I.board }), 'A series'),
       h('button', { type: 'button', class: 'btn', onclick: () => pickFormat() }, h('span', { html: I.cards }), 'Every format'),
@@ -206,7 +207,7 @@ function account(){
 
 /* a new script: first its format (Feature Film, TV, Stage Play…); each one begins as its format does */
 function pickFormat(){
-  const close = modal('New script', h('div', { class: 'fmt-grid' }, ...FORMAT_LIST.map((k) => h('button', { type: 'button', class: 'fmt-tile', onclick: () => { close(); newScript(null, true, k); } },
+  const close = modal('New script', h('div', { class: 'fmt-grid' }, ...FORMAT_LIST.map((k) => h('button', { type: 'button', class: 'fmt-tile' + (k === pref('format') ? ' on' : ''), onclick: () => { close(); newScript(null, true, k); } },
     h('span', { class: 'fmt-mini', 'data-fmt': k, 'aria-hidden': 'true' }, ...miniOf(k)),
     h('b', {}, FORMATS[k].label), h('small', {}, FORMATS[k].note)))), { wide: true });
 }
@@ -224,7 +225,12 @@ async function newScript(data, open = true, format = 'film', patch = null){
   const id = crypto.randomUUID();
   const s = normalize(data || blankScript('Untitled'));
   if (!data){
-    s.titlePage.author = currentUser()?.user_metadata?.name || '';
+    // what a new script starts with (Settings > New scripts, on this device)
+    s.titlePage.author = pref('author') || currentUser()?.user_metadata?.name || '';
+    if (pref('credit')) s.titlePage.credit = pref('credit');
+    if (pref('contact')) s.titlePage.contact = pref('contact');
+    s.settings.page = pref('pageSize') || 'a4';
+    if (pref('sceneNumbers') && pref('sceneNumbers') !== 'off') s.settings.sceneNumbers = pref('sceneNumbers');
     // no title yet: the bar and the title page show what goes there, instead of the word Untitled itself
     s.title = ''; s.titlePage.title = '';
     s.settings.format = format;
