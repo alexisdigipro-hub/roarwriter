@@ -1,4 +1,4 @@
-import { upper } from './model.js';
+import { contdOf, sceneNumbers, upper } from './model.js';
 import { breaksBefore, fmtOf, formatCSS } from './formats.js';
 
 /* The script laid out on real pages, as the industry format has it (Courier 12, 1.5" left, 1" right, top and
@@ -14,7 +14,11 @@ export const PRINT_CSS = `
 .rwprint .pg:last-child{page-break-after:auto;break-after:auto}
 .rwprint .pn{position:absolute;top:.5in;right:1in;font:inherit}
 .rwprint .body{height:100%}
-.rwprint .p{margin:12pt 0 0;white-space:pre-wrap;word-wrap:break-word}
+.rwprint .p{position:relative;margin:12pt 0 0;white-space:pre-wrap;word-wrap:break-word}
+.rwprint[data-sn=left] .p.scene::before,.rwprint[data-sn=both] .p.scene::before{content:attr(data-n);position:absolute;left:-.75in}
+.rwprint[data-sn=right] .p.scene::after,.rwprint[data-sn=both] .p.scene::after{content:attr(data-n);position:absolute;right:-.6in}
+.rwprint .hd{position:absolute;top:.5in;left:1.5in;font:inherit}
+.rwprint .wm{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;font:700 64pt/1 Cousine,"Courier New",monospace;color:rgba(0,0,0,.07);transform:rotate(-35deg);text-transform:uppercase;white-space:nowrap}
 .rwprint .p:first-child{margin-top:0}
 .rwprint .p.scene{margin-top:24pt;text-transform:uppercase}
 .rwprint .p.scene:first-child{margin-top:0}
@@ -38,6 +42,12 @@ const FORMAT_CSS = formatCSS('.rwprint', (t) => `.p.${t}`);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const shown = (e) => (['scene', 'character', 'transition', 'shot', 'act', 'endact', 'page', 'panel'].includes(e.t) ? upper(e.x) : e.x);
 const HEADS = ['scene', 'act', 'page', 'panel'];
+/* what the page adds to the script's own words: the scene numbers and the (CONT'D) of a character who speaks
+   again (the script's settings: sceneNumbers off/left/right/both, contd on unless switched off) */
+export function decorOf(script){
+  return { nums: sceneNumbers(script.els, fmtOf(script) === 'multicam'), contd: script.settings?.contd === false ? new Set() : contdOf(script.els) };
+}
+const said = (e, d) => shown(e) + (d?.contd.has(e.id) ? " (CONT'D)" : '');
 const SPOKEN = ['dialogue', 'paren', 'lyric'];
 
 // what has to stay together on a page: a heading with what follows it (an act with its first scene and its
@@ -63,7 +73,7 @@ function units(els){
   return out;
 }
 
-export function paginate(script){
+export function paginate(script, d = decorOf(script)){
   const letter = script.settings?.page === 'letter';
   const host = document.createElement('div');
   host.className = 'rwprint' + (letter ? ' letter' : '');
@@ -81,7 +91,8 @@ export function paginate(script){
   document.body.appendChild(host);
   const limit = body.clientHeight;
   const pages = [[]];
-  const mk = (e) => { const d = document.createElement('div'); d.className = 'p ' + e.t; d.textContent = shown(e) || ' '; return d; };
+  const deco = d;
+  const mk = (e) => { const d = document.createElement('div'); d.className = 'p ' + e.t; d.textContent = said(e, deco) || ' '; return d; };
   const fits = () => body.scrollHeight <= limit + 1;
   const breaks = breaksBefore(script);
   for (const u of units(script.els)){
@@ -104,9 +115,15 @@ export function paginate(script){
   return pages.filter((p, i) => p.length || i === 0);
 }
 
-export function printHTML(script, { titlePage = true } = {}){
+/* the pages to print; `only` (element ids) makes sides: those scenes alone, numbered as in the whole script */
+export function printHTML(script, { titlePage = script.settings?.titlePrint !== false, only = null } = {}){
   const letter = script.settings?.page === 'letter';
-  const pages = paginate(script);
+  const deco = decorOf(script);
+  const part = only ? { ...script, els: script.els.filter((e) => only.has(e.id)) } : script;
+  const pages = paginate(part, deco);
+  const set = script.settings || {};
+  const sn = ['left', 'right', 'both'].includes(set.sceneNumbers) ? set.sceneNumbers : 'off';
+  const extra = `${set.header ? `<span class="hd">${esc(set.header)}</span>` : ''}${set.watermark ? `<div class="wm">${esc(set.watermark)}</div>` : ''}`;
   const tp = script.titlePage || {};
   // the title page as Final Draft lays it out: title and episode underlined, the credit and the author, and at
   // the foot on the left the copyright, the draft and the contact
@@ -114,17 +131,17 @@ export function printHTML(script, { titlePage = true } = {}){
   const title = titlePage && (tp.title || tp.author) ? `<section class="pg"><div class="tp">
     <h1>${esc(tp.title || script.title)}</h1>${tp.episode ? `<p class="ep">${esc(tp.episode)}</p>` : ''}<p class="by">${esc(tp.credit || 'Written by')}</p><p>${esc(tp.author)}</p></div>
     ${foot.length ? `<div class="tp-foot">${foot.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}</section>` : '';
-  const body = pages.map((els, i) => `<section class="pg">${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}">${esc(shown(e)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
+  const body = pages.map((els, i) => `<section class="pg">${extra}${i ? `<span class="pn">${i + 1}.</span>` : ''}<div class="body">${els.map((e) => `<div class="p ${e.t}"${deco.nums.has(e.id) ? ` data-n="${deco.nums.get(e.id)}"` : ''}>${esc(said(e, deco)) || '&nbsp;'}</div>`).join('')}</div></section>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(script.title || 'Script')}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cousine:ital,wght@0,400;0,700;1,400&display=swap">
 <style>${PRINT_CSS}${FORMAT_CSS}@page{size:${letter ? '8.5in 11in' : 'A4'};margin:0}</style></head>
-<body class="rwprint${letter ? ' letter' : ''}" data-fmt="${fmtOf(script)}" style="margin:0">${title}${body}</body></html>`;
+<body class="rwprint${letter ? ' letter' : ''}" data-fmt="${fmtOf(script)}" data-sn="${sn}" style="margin:0">${title}${body}</body></html>`;
 }
 
 // the PDF: in the app, Electron prints the pages to a file; in a browser, they open in a tab to print or save
-export async function exportPDF(script){
-  const html = printHTML(script);
-  const name = (script.title || 'Script').replace(/[\\/:*?"<>|]+/g, ' ').trim() + '.pdf';
+export async function exportPDF(script, opts = {}){
+  const html = printHTML(script, opts);
+  const name = (script.title || 'Script').replace(/[\\/:*?"<>|]+/g, ' ').trim() + (opts.only ? ' sides' : '') + '.pdf';
   if (window.rwDesktop?.pdf) return window.rwDesktop.pdf(html, name, script.settings?.page === 'letter' ? 'Letter' : 'A4');
   const w = window.open('', '_blank');
   if (!w) throw new Error('Allow pop-ups for RoarWriter to make the PDF.');

@@ -1,5 +1,6 @@
 import { LABEL, SCENE_START, TIMES, charactersOf, el, isGreek, placesOf, upper, uid } from './model.js';
 import { formatOf, kindsOf, nextOf, tabOf } from './formats.js';
+import { pref } from './prefs.js';
 import { fountainToEls } from './fountain.js';
 
 /* The page you write on: one editable block holding a <p> per element (data-t = its kind), laid out on the
@@ -21,7 +22,7 @@ export class Editor {
     this.box = document.createElement('div');
     this.box.className = 'script';
     this.box.contentEditable = 'true';
-    this.box.spellcheck = true;
+    this.box.spellcheck = pref('spell');
     this.box.setAttribute('role', 'textbox');
     this.box.setAttribute('aria-multiline', 'true');
     this.pop = document.createElement('div');
@@ -284,7 +285,7 @@ export class Editor {
   /* ---------- suggestions: names on a character, INT./EXT., places and times on a scene heading ---------- */
   suggest(){
     const p = this.current();
-    if (!p || document.activeElement !== this.box){ this.hidePop(); return; }
+    if (!p || document.activeElement !== this.box || !pref('suggest')){ this.hidePop(); return; }
     const t = p.dataset.t;
     const text = this.textOf(p);
     const at = this.offset(p);
