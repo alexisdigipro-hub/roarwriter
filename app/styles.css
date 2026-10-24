@@ -169,3 +169,23 @@ html[data-desktop=win32] .top{padding-right:150px}
   .paper{transform-origin:top center;zoom:.46}
   .brand{display:none}
 }
+/* phones (Alex, 24 Oct: the bar was squeezed into one row, Dialogue over the page count, the buttons pressed into
+   ovals): two rows. Back, the title and round icons (title page, export, AI) on top; the kind of line, the pages and
+   Saved under them. The AI opens over the whole screen. */
+@media (max-width:600px){
+  .edit-top{flex-wrap:wrap;row-gap:8px;padding:8px 12px;gap:8px}
+  .edit-top::after{content:'';order:4;flex-basis:100%;height:0}
+  .edit-top > *{flex:none}
+  .edit-top .ib{order:1}
+  .top:not(.edit-top) > *{flex:none} .top:not(.edit-top) > .btn{width:38px;height:38px;border-radius:50%}
+  .top:not(.edit-top) .pill-search{flex:1 1 0;min-width:0} .top:not(.edit-top) .pill-search input{width:100%;min-width:0}
+  .top-title{font-size:21px;margin:0 2px}
+  .edit-top .title-in{order:2;flex:1 1 0;min-width:0;padding:0 8px}
+  .edit-top > .btn:not(.type-btn){order:3;width:38px;height:38px;padding:0;border-radius:50%}
+  .edit-top .type-btn{order:5;height:32px;font-size:13px;gap:6px}
+  .edit-top .chip{order:6}
+  .edit-top .spacer{order:7;flex:1}
+  .edit-top .save{order:8;font-size:12px}
+  .ai{top:0;width:100%;z-index:40;background:#16181d;border-left:0;padding:14px 14px calc(14px + env(safe-area-inset-bottom))}
+  .desk{padding-top:12px}
+}
