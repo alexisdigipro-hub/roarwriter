@@ -212,6 +212,7 @@ async function viewScript(id){
   // the page
   const paper = h('div', { class: 'paper' + (script.settings.page === 'letter' ? ' letter' : '') });
   const desk = h('div', { class: 'desk' }, paper);
+  const zoom = pageZoom(paper, desk);
 
   // the AI
   const aiPanel = h('aside', { class: 'ai', hidden: true });
@@ -254,7 +255,7 @@ async function viewScript(id){
     if (cmd === 'pdf') pdf(); else if (cmd === 'fdx') saveAs('fdx'); else if (cmd === 'fountain') saveAs('fountain'); else if (cmd === 'title') titlePage(); else if (cmd === 'ai') toggleAI();
     else if (cmd.startsWith('type:')) editor.setCurrentType(cmd.slice(5));
   });
-  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); editor?.destroy(); editor = null; await store.flush(); };
+  leaveEditor = async () => { document.removeEventListener('keydown', keys); offMenu?.(); offKeyboard(); zoom.off(); editor?.destroy(); editor = null; await store.flush(); };
 
   function typeMenu(){
     const r = typeBtn.getBoundingClientRect();
@@ -272,7 +273,12 @@ async function viewScript(id){
   }
   function moreMenu(){
     const r = moreBtn.getBoundingClientRect();
+    const pct = h('b', {}, zoom.label());
+    const step = (d) => (e) => { e.preventDefault(); zoom.by(d); pct.textContent = zoom.label(); };
     const menu = h('div', { class: 'menu', style: `right:${Math.max(8, innerWidth - r.right)}px;top:${r.bottom + 6}px` },
+      h('div', { class: 'zoom-row' }, h('span', {}, 'Zoom'),
+        h('button', { class: 'ib', type: 'button', 'aria-label': 'Smaller', html: I.minus, onmousedown: step(-0.1) }), pct,
+        h('button', { class: 'ib', type: 'button', 'aria-label': 'Bigger', html: I.plus, onmousedown: step(0.1) })),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); titlePage(); } }, h('span', {}, 'Title page'), h('kbd', {}, 'title, author, page size')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); pdf(); } }, h('span', {}, 'Export PDF'), h('kbd', {}, 'to send or print')),
       h('button', { type: 'button', onmousedown: (e) => { e.preventDefault(); menu.remove(); saveAs('fdx'); } }, h('span', {}, 'Save as Final Draft'), h('kbd', {}, '.fdx')),
@@ -351,6 +357,36 @@ async function viewScript(id){
       !notes && els.length && (task === 'rewrite' || task === 'custom') ? h('button', { class: 'btn', onclick: () => { if (!confirm('Replace the whole scene with this?')) return; editor.insertEls(els.map((e) => ({ ...e, id: crypto.randomUUID().slice(0, 8) })), { replaceFrom: a, replaceTo: b }); toast('Scene replaced'); } }, 'Replace scene') : null,
       h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Could not copy'); } } }, 'Copy')));
   }
+}
+
+/* Zoom of the page on phones and tablets (Alex, 24 Oct): the letters grow or shrink and the lines wrap again, so
+   the page never has to be moved sideways. Two fingers on the page pinch it; ⋯ > Zoom has − and +. Kept per device. */
+function pageZoom(paper, desk){
+  const MIN = 0.7, MAX = 2;
+  let z = 1;
+  try { z = Math.min(MAX, Math.max(MIN, +localStorage.getItem('rw_zoom') || 1)); } catch {}
+  const set = (v, keep = true) => {
+    z = Math.round(Math.min(MAX, Math.max(MIN, v)) * 100) / 100;
+    paper.style.setProperty('--z', z);
+    if (keep) try { localStorage.setItem('rw_zoom', String(z)); } catch {}
+  };
+  set(z, false);
+  let start = 0, from = 1;
+  const gap = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const down = (e) => { if (e.touches.length === 2){ start = gap(e.touches); from = z; } };
+  const move = (e) => { if (e.touches.length === 2 && start){ e.preventDefault(); set(from * gap(e.touches) / start, false); } };
+  const up = (e) => { if (start && e.touches.length < 2){ start = 0; set(z); } };
+  // Safari's own pinch would zoom the whole window instead
+  const gesture = (e) => e.preventDefault();
+  desk.addEventListener('touchstart', down, { passive: true });
+  desk.addEventListener('touchmove', move, { passive: false });
+  desk.addEventListener('touchend', up); desk.addEventListener('touchcancel', up);
+  desk.addEventListener('gesturestart', gesture); desk.addEventListener('gesturechange', gesture);
+  return {
+    by: (d) => set(z + d),
+    label: () => `${Math.round(z * 100)}%`,
+    off: () => {},
+  };
 }
 
 // short names for the kinds on the phone's bar
