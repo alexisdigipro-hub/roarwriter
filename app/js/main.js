@@ -68,7 +68,9 @@ function viewSignIn(mode = 'in'){
       try { await recover(f.email.trim()); say('We sent you an email with a link for a new password.', 'ok'); } catch (e) { say(authMessage(e), 'err'); }
     } }, 'Forgot password?') : null,
     msg,
-    h('p', { class: 'hint' }, 'One account for RoarMe, Roardino and RoarWriter: if you have RoarMe, sign in with the same email and password.')].filter(Boolean));
+    h('p', { class: 'hint' }, 'One account for RoarMe, Roardino and RoarWriter: if you have RoarMe, sign in with the same email and password.'),
+    // Privacy Policy and Terms (Alex, 25 Oct): on the company site, both on one page
+    mode === 'up' ? h('p', { class: 'hint' }, 'By creating an account you agree to the ', legalLink('#terms', 'Terms'), ' and the ', legalLink('#privacy', 'Privacy Policy'), '.') : null].filter(Boolean));
   card.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = card.querySelector('button[type=submit]');
@@ -89,8 +91,9 @@ function viewSignIn(mode = 'in'){
       h('h1', { class: 'hero-h', html: 'Write the film.<br><b>In the format it is shot from.</b>' }),
       h('p', { class: 'lede' }, 'Scene headings, action, characters and dialogue laid out as the industry reads them, in English or Greek. Final Draft and Fountain in and out, a PDF ready to send, and an AI that helps when you ask.'),
       card),
-    h('p', { class: 'auth-foot' }, 'RoarWriter · The Mad Lions Lab')));
+    h('p', { class: 'auth-foot' }, 'RoarWriter · The Mad Lions Lab · ', legalLink('#privacy', 'Privacy Policy'), ' · ', legalLink('#terms', 'Terms'))));
 }
+function legalLink(at, label){ return h('a', { href: 'https://themadlions.com/legal/roarwriter/' + at, target: '_blank', rel: 'noopener' }, label); }
 
 /* ---------- the library: every script ---------- */
 /* Alex, 25 Oct ("smarter, handier, fresher, more 2026"): one top row with every control; the script being written

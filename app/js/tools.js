@@ -95,6 +95,9 @@ export function openSettings(ctx, tab = ctx.global ? 'new' : 'script'){
     account: () => [
       row(ctx.me?.() || 'Your account', h('button', { class: 'btn', type: 'button', onclick: () => ctx.signOut?.() }, 'Sign out'), ctx.email || ''),
       h('p', { class: 'hint' }, `One account for RoarMe, Roardino and RoarWriter. Your scripts are kept in it and on this device. ${ctx.version ? `RoarWriter ${ctx.version}.` : ''}`),
+      h('p', { class: 'hint' }, h('a', { href: 'https://themadlions.com/legal/roarwriter/#privacy', target: '_blank', rel: 'noopener' }, 'Privacy Policy'), ' · ',
+        h('a', { href: 'https://themadlions.com/legal/roarwriter/#terms', target: '_blank', rel: 'noopener' }, 'Terms'),
+        ' · To delete your account and everything in it: RoarMe > Settings > Privacy and Security > Delete My Account.'),
     ],
     keys: () => [h('div', { class: 'keys' }, ...[
       ['Enter', 'The next kind of line'], ['Tab / ⇧Tab', 'Change the kind of line'], [`${navigator.platform.includes('Mac') ? '⌥' : 'Alt+'}1 … 9`, 'Pick a kind (0: Unformatted)'],

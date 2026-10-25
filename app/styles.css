@@ -735,3 +735,5 @@ body.rw-readonly .kindbar,body.rw-readonly .type-btn,body.rw-readonly .ai-quick,
 .menu .zoom-row .ib{width:34px;height:34px;padding:0;justify-content:center;border:1px solid var(--edge);background:var(--glass);border-radius:50%}
 .menu .zoom-row b{min-width:48px;text-align:center;font-size:13.5px;font-variant-numeric:tabular-nums}
 .fmt-tile.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+/* Privacy Policy and Terms links (Alex, 25 Oct) */
+.auth-foot a, .auth .hint a, .hint a{color:inherit;text-decoration:underline;text-underline-offset:2px}
