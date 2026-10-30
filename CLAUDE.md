@@ -18,7 +18,10 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
   and measured in the page; Electron printToPDF, a browser prints).
 - **AI**: Edge Function `supabase/functions/roarwriter-ai` (Claude, model claude-opus-5-5, server-side fallbacks). The key is the
   function's secret ANTHROPIC_API_KEY, set by Alex in Supabase > Edge Functions > Secrets; never in the repo or the app.
-- **Look**: RoarMe's dark glass, round glass buttons, pill fields, soft tiles, orange accent (#ff6b2c), the page white
+- **Look** (since 0.6.0, Alex 30 Oct: "RoarWriter, RoarList, RoarMorph, RoarKit exactly alike, as RoarMail"): app/theme.css,
+  loaded after styles.css, is RoarMail's Simba: graphite glass panels floating on a graphite backdrop (on a computer the
+  scene list, the desk and the AI), red #d40000 that glows (no more orange), the chosen thing lit from inside, 12px corners,
+  Jost wordmark; the phone layout takes only the colours. Keep it in step with RoarMail and RoarKit/RoarMorph's theme.css. The page white
   in Cousine (a Courier with Greek, so both languages have the same weight; Courier Prime had no Greek).
 - **Releases**: pushing to main updates the web version (.github/workflows/web.yml, which also checks the code).
   The desktop installers come from a tag `vX.Y.Z` (.github/workflows/desktop.yml): bump `version` in package.json, tag,

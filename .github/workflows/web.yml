@@ -54,7 +54,7 @@ jobs:
           # (GitHub Pages lets them be cached for 10 minutes, and Safari keeps modules longer)
           V=${GITHUB_SHA::7}
           sed -i -E "s#(from '\./[a-z]+\.js)'#\1?v=$V'#g; s#(import\('\./[a-z]+\.js)'#\1?v=$V'#g" js/*.js
-          sed -i -E "s#href=\"styles\.css\"#href=\"styles.css?v=$V\"#; s#src=\"js/main\.js\"#src=\"js/main.js?v=$V\"#" index.html
+          sed -i -E "s#href=\"styles\.css\"#href=\"styles.css?v=$V\"#; s#href=\"theme\.css\"#href=\"theme.css?v=$V\"#; s#src=\"js/main\.js\"#src=\"js/main.js?v=$V\"#" index.html
           grep -q "main.js?v=$V" index.html
           touch .nojekyll
           git init -q -b gh-pages

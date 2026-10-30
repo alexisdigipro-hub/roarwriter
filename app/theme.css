@@ -1,0 +1,84 @@
+/* RoarWriter wears RoarMail's look (Alex, 30 Oct: "RoarWriter, RoarList, RoarMorph, RoarKit exactly alike in design and
+   UI, all of them as RoarMail"). RoarMail's Simba: graphite glass panels that float on a soft graphite backdrop with a
+   gap between them, one red accent that glows (the orange is gone), the chosen thing lit from inside, 12px corners,
+   the system font for reading and Jost for the wordmark. The page stays white. Loaded after styles.css: it changes how
+   things look, never what they do; the phone layout (under 860px) keeps its own arrangement and takes only the
+   colours. Keep it in step with RoarMail's styles.css (the Simba block), RoarKit's and RoarMorph's theme.css. */
+
+:root {
+  --bg: #1b1e23; --text: #eef0f3; --muted: rgba(214,220,228,.58);
+  --panel: rgba(44,49,57,.62); --side-p: rgba(58,64,74,.55); --float: rgba(40,45,53,.96);
+  --panel2: rgba(255,255,255,.055); --glass: rgba(255,255,255,.055); --glass-2: rgba(255,255,255,.1);
+  --line: rgba(255,255,255,.08); --edge: rgba(255,255,255,.1); --edge-2: rgba(255,255,255,.16); --field: rgba(0,0,0,.2);
+  --acc: #d40000; --acc-2: #ff3b30; --acc-ink: #fff;
+  --sel: color-mix(in srgb, var(--acc) 18%, transparent); --sel-edge: color-mix(in srgb, var(--acc) 60%, transparent);
+  --halo: 0 0 24px color-mix(in srgb, var(--acc) 24%, transparent);
+  --blur: blur(26px) saturate(140%);
+  --lit: inset 0 1px 0 rgba(255,255,255,.08), 0 30px 70px rgba(0,0,0,.45);
+  --r: 12px; --R: 19px; --gap: 14px;
+  --brand: Jost, Futura, 'Century Gothic', 'Avenir Next', system-ui, sans-serif;
+}
+
+/* ---------- the backdrop ---------- */
+html, body { background: radial-gradient(1200px 700px at 50% -12%, #4b525d 0%, transparent 62%), linear-gradient(180deg, #2b3038 0%, #1c1f24 55%, #15171b 100%) fixed; }
+body::before { background: radial-gradient(520px 420px at 82% 88%, color-mix(in srgb, var(--acc) 14%, transparent) 0%, transparent 70%), radial-gradient(420px 360px at 12% 10%, rgba(255,255,255,.05) 0%, transparent 70%); }
+
+/* ---------- the wordmark: Jost, the second half red and glowing ---------- */
+.brand { font-family: var(--brand); letter-spacing: .14em; font-size: 17px; }
+.brand .a { font-weight: 300; }
+.brand .b { font-weight: 700; color: var(--acc-2); text-shadow: 0 0 18px color-mix(in srgb, var(--acc) 60%, transparent); }
+
+/* ---------- the top row: frosted over the backdrop, so a page scrolled under it stays readable ---------- */
+.top { background: rgba(32,36,42,.72); border-bottom-color: transparent; box-shadow: none; }
+.top-title { font-size: 20px; font-weight: 600; letter-spacing: .01em; }
+
+/* ---------- controls: graphite glass, 12px corners, the main one red and glowing ---------- */
+.btn { border: 0; border-radius: var(--r); background: var(--glass); box-shadow: inset 0 0 0 1px var(--edge); }
+.btn:hover { background: var(--glass-2); transform: none; }
+.btn.primary { background: var(--acc); color: #fff; box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 60%, transparent), 0 6px 24px color-mix(in srgb, var(--acc) 45%, transparent); }
+.btn.primary:hover { background: var(--acc); filter: brightness(1.08); }
+.ib { border: 0; border-radius: var(--r); background: transparent; color: var(--muted); }
+.ib:hover { background: var(--glass-2); color: var(--text); }
+.top .ib { background: var(--glass); box-shadow: inset 0 0 0 1px var(--edge); color: var(--text); }
+.seg { border: 0; background: rgba(0,0,0,.25); box-shadow: inset 0 0 0 1px var(--edge); }
+.seg button.on { color: #2a1410; background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 38%, #fff), color-mix(in srgb, var(--acc) 70%, #fff)); box-shadow: 0 0 20px color-mix(in srgb, var(--acc) 50%, transparent); }
+.pill-search { border: 0; border-radius: var(--r); background: var(--field); box-shadow: inset 0 0 0 1px var(--edge); }
+.pill-search:focus-within { box-shadow: inset 0 0 0 1px var(--sel-edge), 0 0 0 4px color-mix(in srgb, var(--acc) 16%, transparent); }
+.input { border-radius: var(--r); border-color: var(--edge); }
+.input:focus { border-color: var(--sel-edge); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 16%, transparent); }
+.chip { border-radius: var(--r); }
+.chip.shared { background: var(--sel); }
+.kicker { color: var(--acc-2); letter-spacing: .16em; font-size: 10.5px; font-weight: 600; }
+:focus-visible { outline-color: var(--acc-2); }
+
+/* ---------- the library: the script being written and the new ones as glass cards ---------- */
+.hero { border-radius: var(--R); border-color: var(--edge); background: var(--panel); box-shadow: var(--lit); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.hero:hover, .hero:focus-visible { border-color: var(--sel-edge); box-shadow: var(--lit), var(--halo); }
+.hero-stats div { border-radius: var(--r); background: var(--glass); border-color: var(--edge); }
+.starts { border-radius: var(--R); border-color: var(--edge); background: var(--side-p); box-shadow: var(--lit); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.start { border-radius: var(--r); background: var(--glass); border-color: var(--edge); }
+.start:hover { background: var(--glass-2); }
+.tile { border-radius: var(--R); border-color: var(--edge); background: var(--panel); box-shadow: var(--lit); }
+.tile:hover, .tile:focus-visible { transform: none; border-color: var(--sel-edge); box-shadow: var(--lit), var(--halo); }
+
+/* ---------- writing: the scene list and the AI float as glass beside the page ---------- */
+.srow, .crow { border-radius: var(--r); }
+.srow.on { background: var(--sel); border-color: var(--sel-edge); box-shadow: var(--halo); }
+.sn { color: var(--acc-2); }
+.rsz:hover::after, .rsz.on::after { background: var(--acc-2); }
+@media (min-width: 861px) {
+  .work { height: calc(100vh - 58px); }
+  .side, .ai { border: 1px solid var(--edge); border-radius: var(--R); box-shadow: var(--lit); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+  .side { margin: 0 calc(var(--gap) / 2) var(--gap) var(--gap); background: var(--side-p); }
+  .ai { margin: 0 var(--gap) var(--gap) calc(var(--gap) / 2); background: var(--side-p); }
+  .desk { margin: 0 calc(var(--gap) / 2) var(--gap); border: 1px solid var(--edge); border-radius: var(--R); background: var(--panel); box-shadow: var(--lit); }
+}
+
+/* ---------- windows, menus and the toast float as glass ---------- */
+.modal { border-radius: calc(var(--R) + 4px); background: var(--float); border-color: var(--edge-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.modal-bg { background: rgba(10,12,15,.45); }
+.menu { border-radius: var(--r); background: var(--float); border-color: var(--edge-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.menu button { border-radius: 8px; }
+.toast { background: var(--float); border-color: var(--edge-2); }
+.toast-a { background: var(--acc); }
+.card.over { box-shadow: 0 0 0 2px var(--acc-2), 0 14px 34px rgba(0,0,0,.35); }

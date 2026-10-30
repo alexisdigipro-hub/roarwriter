@@ -100,7 +100,7 @@ function legalLink(at, label){ return h('a', { href: 'https://themadlions.com/le
    first, big, to go straight back to it; new scripts one click away in their format; then every script as a
    small page showing how it really begins, filtered (all, mine, shared) and sorted (recent, A to Z) */
 let libSearch = '', libWho = 'all', libSort = 'recent';
-const FMT_DOT = { film: '#ff6b2c', tv: '#4a90e2', multicam: '#f2c230', stage: '#c77dff', musical: '#f48fb1', audio: '#5cb85c', av: '#38bdf8', comic: '#fa8072' };
+const FMT_DOT = { film: '#ff3b30', tv: '#4a90e2', multicam: '#f2c230', stage: '#c77dff', musical: '#f48fb1', audio: '#5cb85c', av: '#38bdf8', comic: '#fa8072' };
 // the first lines of a script, as its page begins (the title page when there is nothing written yet)
 function peekOf(s, big = false){
   if (s.meta?.kind === 'series') return h('div', { class: 'pk pk-tp pk-series' }, h('small', {}, 'SERIES'), h('b', {}, upper(s.title || 'Untitled')), h('span', {}, `${s.meta.episodes || 0} episodes`));
