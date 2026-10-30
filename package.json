@@ -1,7 +1,7 @@
 {
   "name": "roarwriter",
   "productName": "RoarWriter",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "RoarWriter: screenwriting in the industry format, English and Greek. The Mad Lions Lab.",
   "author": "THEMADLIONS",
   "private": true,
