@@ -61,6 +61,13 @@ textarea.input{resize:vertical;line-height:1.45}
 .lede{color:color-mix(in srgb,var(--text) 72%,transparent);margin:0 0 8px;font-size:15px;line-height:1.55}
 .auth-card{display:flex;flex-direction:column;gap:12px;padding:20px;border-radius:22px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--lit);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
 .auth-card .seg{align-self:flex-start}
+.roar-connect{display:flex;align-items:center;justify-content:center;gap:9px;min-height:46px;font-size:15px}
+.roar-connect .rc-mark{display:inline-flex;width:18px;height:18px} .roar-connect .rc-mark svg{width:18px;height:18px}
+.auth-or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px}
+.auth-or::before,.auth-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.rc-h{margin:0;font-size:18px;font-weight:600}
+.rc-code{font-family:var(--mono);font-size:clamp(30px,8vw,40px);font-weight:700;letter-spacing:.08em;text-align:center;padding:14px 8px;border-radius:14px;background:var(--field);border:1px solid var(--line);user-select:all}
+.rc-otp{font-family:var(--mono);font-size:24px;letter-spacing:.3em;text-align:center}
 .auth-foot{margin-top:28px;font-size:12px;color:var(--muted)}
 
 /* top bar (the Mac's window buttons sit at its left in the app) */
