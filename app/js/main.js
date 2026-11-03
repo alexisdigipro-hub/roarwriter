@@ -1,4 +1,4 @@
-import { addShare, authMessage, askAI, currentUser, listShares, myRole, onAuth, recover, removeShare, setShareRole, signIn, signOut, signUp } from './cloud.js';
+import { addShare, authMessage, askAI, connectFinish, connectPoll, connectStart, currentUser, listShares, myRole, onAuth, recover, removeShare, setShareRole, signIn, signOut, signUp, verifyMfa } from './cloud.js';
 import { createStore } from './store.js';
 import { REVISIONS, cleanName as cleanNameOf, blankScript, charactersOf, isGreek, metaOf, normalize, pageCount, scenesOf, upper } from './model.js';
 import { Editor } from './editor.js';
@@ -55,14 +55,18 @@ function viewSignIn(mode = 'in'){
   const say = (t, kind = '') => { msg.textContent = t; msg.className = 'msg' + (kind ? ' ' + kind : ''); };
   const field = (k, label, type = 'text', extra = {}) => h('label', { class: 'field' }, h('span', {}, label), h('input', { class: 'input', type, value: f[k], oninput: (e) => { f[k] = e.target.value; }, ...extra }));
   const card = h('form', { class: 'auth-card', novalidate: true });
+  // what a sign-in gives: a session (route() follows onAuth), or the 6-digit code still to ask for
+  const after = (r) => { if (r?.mfa) askCode(r.mfa); };
   const draw = () => card.replaceChildren(...[
+    mode === 'in' ? h('button', { class: 'btn primary roar-connect', type: 'button', onclick: roarConnect }, h('span', { class: 'rc-mark', html: I.user }), 'Sign in with Roar Account') : null,
+    mode === 'in' ? h('div', { class: 'auth-or' }, h('span', {}, 'or with email')) : null,
     h('div', { class: 'seg' },
       h('button', { type: 'button', class: mode === 'in' ? 'on' : '', onclick: () => { mode = 'in'; say(''); draw(); } }, 'Sign in'),
       h('button', { type: 'button', class: mode === 'up' ? 'on' : '', onclick: () => { mode = 'up'; say(''); draw(); } }, 'New account')),
     mode === 'up' ? field('name', 'Your name', 'text', { autocomplete: 'name' }) : null,
     field('email', 'Email', 'email', { autocomplete: 'email', required: true }),
     field('password', mode === 'up' ? 'Password (at least 6 characters)' : 'Password', 'password', { autocomplete: mode === 'up' ? 'new-password' : 'current-password', required: true }),
-    h('button', { class: 'btn primary', type: 'submit' }, mode === 'up' ? 'Create account' : 'Sign in'),
+    h('button', { class: mode === 'up' ? 'btn primary' : 'btn', type: 'submit' }, mode === 'up' ? 'Create account' : 'Sign in'),
     mode === 'in' ? h('button', { class: 'linkish', type: 'button', onclick: async () => {
       if (!f.email.trim()) return say('Type your email first, then press Forgot password again.', 'err');
       try { await recover(f.email.trim()); say('We sent you an email with a link for a new password.', 'ok'); } catch (e) { say(authMessage(e), 'err'); }
@@ -80,10 +84,80 @@ function viewSignIn(mode = 'in'){
       if (mode === 'up'){
         const d = await signUp(f.email.trim(), f.password, f.name.trim());
         if (!d?.access_token){ mode = 'in'; draw(); say(`Almost there: we sent an email to ${f.email.trim()}. Open its link, then sign in here.`, 'ok'); }
-      } else await signIn(f.email.trim(), f.password);
+      } else { const r = await signIn(f.email.trim(), f.password); if (r?.mfa) return after(r); }
     } catch (err) { say(authMessage(err), 'err'); }
     btn.disabled = false;
   });
+
+  /* Sign in with Roar Account (Alex, Nov 2026: one sign-in for every Roar app): the browser opens
+     themadlions.com/account/ with a code, the person allows RoarWriter there, and this card waits for it */
+  let waiting = 0; // which wait is running (Cancel or a new try ends the one before)
+  async function roarConnect(){
+    const run = ++waiting;
+    // the web version opens the tab now, while the click still counts, so no popup blocker stops it
+    const tab = DESKTOP ? null : window.open('', '_blank');
+    say('Opening your browser…');
+    let c;
+    try { c = await connectStart(); }
+    catch (e) { tab?.close(); return say(authMessage(e), 'err'); }
+    if (run !== waiting) return tab?.close();
+    const openPage = () => { const w = window.open(c.url, '_blank'); return w; };
+    if (tab) { try { tab.location.href = c.url; } catch { openPage(); } } else openPage();
+    const note = h('p', { class: 'msg' });
+    card.replaceChildren(
+      h('h2', { class: 'rc-h' }, 'Allow RoarWriter in your browser'),
+      h('p', { class: 'hint' }, 'Your browser opened your Roar Account. Check that it shows this code, then press Allow.'),
+      h('div', { class: 'rc-code', 'aria-label': 'Code' }, c.code),
+      h('button', { class: 'linkish', type: 'button', onclick: openPage }, 'Open the page again'),
+      note,
+      h('button', { class: 'btn', type: 'button', onclick: () => { waiting++; say(''); draw(); } }, 'Cancel'));
+    const until = Date.now() + Math.min(600, c.expires_in || 600) * 1000;
+    const again = (t) => {
+      card.replaceChildren(h('h2', { class: 'rc-h' }, 'Sign in with Roar Account'), h('p', { class: 'msg err' }, t),
+        h('button', { class: 'btn primary', type: 'button', onclick: roarConnect }, 'Try again'),
+        h('button', { class: 'btn', type: 'button', onclick: () => { waiting++; say(''); draw(); } }, 'Cancel'));
+    };
+    while (run === waiting && card.isConnected){
+      await new Promise((r) => setTimeout(r, 2000));
+      if (run !== waiting || !card.isConnected) return;
+      if (Date.now() > until) return again('The code ran out of time. Try again.');
+      let r;
+      try { r = await connectPoll(c.code, c.secret); note.textContent = ''; }
+      catch (e) { note.textContent = authMessage(e); note.className = 'msg err'; continue; }
+      if (run !== waiting) return;
+      if (r?.expired) return again('The code ran out of time. Try again.');
+      if (r?.token_hash){
+        waiting++;
+        note.className = 'msg'; note.textContent = 'Signing in…';
+        try { return after(await connectFinish(r.token_hash)); }
+        catch (e) { return again(authMessage(e)); }
+      }
+    }
+  }
+
+  // two-step verification: the 6-digit code from the authenticator app, for either way of signing in
+  function askCode(pending){
+    let code = '';
+    const note = h('p', { class: 'msg' });
+    const input = h('input', { class: 'input rc-otp', type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 8, placeholder: '123456', oninput: (e) => { code = e.target.value; if (code.replace(/\D/g, '').length === 6) go(); } });
+    const btn = h('button', { class: 'btn primary', type: 'button', onclick: () => go() }, 'Verify');
+    let busy = false;
+    async function go(){
+      if (busy) return;
+      if (code.replace(/\D/g, '').length !== 6) { note.className = 'msg err'; note.textContent = 'Type the 6 digits from your authenticator app.'; return; }
+      busy = true; btn.disabled = true; note.className = 'msg'; note.textContent = 'Checking…';
+      try { await verifyMfa(pending, code); }
+      catch (e) { note.className = 'msg err'; note.textContent = authMessage(e); input.select(); }
+      busy = false; btn.disabled = false;
+    }
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    card.replaceChildren(
+      h('h2', { class: 'rc-h' }, 'Two-step verification'),
+      h('p', { class: 'hint' }, `Type the 6-digit code from your authenticator app for ${pending.user?.email || 'your account'}.`),
+      input, btn, note,
+      h('button', { class: 'btn', type: 'button', onclick: () => { say(''); draw(); } }, 'Cancel'));
+    setTimeout(() => input.focus(), 30);
+  }
   draw();
   app.replaceChildren(h('div', { class: 'auth' },
     h('div', { class: 'auth-in' },

@@ -37,10 +37,40 @@ const AUTH_ERRORS = [
   [/already registered|already exists/i, 'There is already an account with this email. Sign in instead.'],
   [/password should be at least/i, 'The password needs at least 6 characters.'],
   [/rate limit|too many/i, 'Too many tries. Wait a minute and try again.'],
+  [/invalid totp|invalid.*code|mfa_verification_failed/i, 'That code is not right. Type the newest one from your authenticator app.'],
+  [/challenge.*expired|mfa_challenge_expired/i, 'The code took too long. Try again with a new one.'],
+  [/otp_expired|token has expired|expired/i, 'The sign-in took too long. Try again.'],
 ];
 export const authMessage = (e) => { const m = e?.message || ''; for (const [re, t] of AUTH_ERRORS) if (re.test(m)) return t; return /fetch|network/i.test(m) ? 'No connection. Check the internet and try again.' : m || 'Something went wrong.'; };
 
-export async function signIn(email, password){ setSession(await call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } })); return session; }
+/* Two-step verification (Nov 2026): an account with a verified authenticator (TOTP) gets an aal1 session first, and
+   RoarMe's data refuses it (roar_aal_ok()). Such a session is not kept: the sign-in returns { mfa } and the 6-digit
+   code (verifyMfa) turns it into the aal2 session that is kept. */
+const aalOf = (t) => { try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal || 'aal1'; } catch { return 'aal1'; } };
+const totpOf = (s) => (s?.user?.factors || []).find((f) => f.factor_type === 'totp' && f.status === 'verified') || null;
+function finish(s){
+  if (s?.access_token && aalOf(s.access_token) !== 'aal2' && totpOf(s)) return { mfa: s };
+  setSession(s);
+  return { session };
+}
+export async function verifyMfa(pending, code){
+  const f = totpOf(pending);
+  const t = pending.access_token;
+  const ch = await call(`/auth/v1/factors/${f.id}/challenge`, { method: 'POST', body: {}, token: t });
+  const s = await call(`/auth/v1/factors/${f.id}/verify`, { method: 'POST', body: { challenge_id: ch.id, code: String(code).replace(/\D/g, '') }, token: t });
+  setSession({ ...s, user: s.user || pending.user });
+  return session;
+}
+
+export const signIn = async (email, password) => finish(await call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } }));
+
+/* Sign in with Roar Account (Nov 2026: one sign-in for every Roar app). The Edge Function roar-connect gives a code
+   and a secret, the person allows RoarWriter on themadlions.com/account/ in the browser, and polling with the
+   secret then gives a one-time magic-link token, turned into a session by Auth's verify. */
+const connect = (body) => call('/functions/v1/roar-connect', { method: 'POST', body });
+export const connectStart = () => connect({ do: 'start', app: 'roarwriter' });
+export const connectPoll = (code, secret) => connect({ do: 'poll', code, secret });
+export const connectFinish = async (token_hash) => finish(await call('/auth/v1/verify', { method: 'POST', body: { type: 'magiclink', token_hash } }));
 export async function signUp(email, password, name){
   const d = await call('/auth/v1/signup', { method: 'POST', body: { email, password, data: { name } } });
   if (d?.access_token) setSession(d);

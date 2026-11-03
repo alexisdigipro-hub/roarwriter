@@ -39,3 +39,7 @@ Talk to him in Greek, friendly and concrete, no em dashes; the app's own text is
   The script also carries rv/du/f on lines (revision colour, dual dialogue, bold/italic/underline marks [from, to, 'b'|'i'|'u'])
   and boards, alts, revision, timing, reports, pacing, beats, schedule, assign (model.js normalize and mergeScripts).
   SQL: roarwriter_versions, roarwriter_presence, the storage bucket and its policies (supabase/roarwriter.sql, last parts).
+- Sign in with Roar Account (Alex, Nov 2026, 0.6.1): cloud.js connectStart/connectPoll/connectFinish against RoarMe's Edge Function
+  roar-connect (code + secret, the person allows it on themadlions.com/account/, then a magic-link token_hash for /auth/v1/verify);
+  the waiting card is main.js roarConnect. Two-step verification: cloud.js finish() keeps no aal1 session of an account with a
+  verified TOTP factor, main.js askCode asks for the 6 digits and verifyMfa (challenge + verify) gives the aal2 session.
