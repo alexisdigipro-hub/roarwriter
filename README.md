@@ -47,6 +47,7 @@ Screenwriting in the industry format, in English or Greek. The Mad Lions Lab.
 - **TV series** (Scripts > A series): the show's bible (logline, the world, characters and places from every episode, what is known since which episode) and its episodes; in an episode, the Series tab at the side.
 - **On a phone or tablet** (the web version): the page fills the screen in letters big enough to write in (the PDF keeps the real page), a bar on the keyboard with the seven kinds and Undo / Redo (there is no Tab there), Scenes and characters and the AI over the whole screen, one menu (⋯) for the zoom, the title page and the exports; two fingers on the page zoom it (the lines wrap again), the scripts as a list. Add it to the home screen (Share > Add to Home Screen) and it opens like an app.
 - **The Mac/Windows app** adds a real menu (File: Title Page, Export PDF, Save as Final Draft / Fountain; Format: the seven kinds with their shortcuts), Greek and English spelling, and updates itself from new releases.
+- **0.6.2**: new icon (the Lab's one family of icons, 10 Nov 2026).
 
 ## Set up (once)
 1. Supabase (RoarMe's project) > SQL Editor: run `supabase/roarwriter.sql`.
